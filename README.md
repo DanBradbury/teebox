@@ -2,7 +2,7 @@
 
 A simple, lightweight driving range visualizer for the launch monitor you already own.
 
-![Teebox showing a driver shot](docs/screenshot.png)
+![Teebox driving range with mountain scenery and a driver shot](docs/screenshot.png)
 
 Hit a ball, watch it fly. Teebox receives shot data from your launch monitor, plays back the
 ball flight, and shows carry, total distance, offline, apex and a session history. It is one small
