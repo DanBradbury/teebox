@@ -370,8 +370,8 @@ function camUpdate(dt) {
   let dpos = HOME.pos, dtgt = HOME.tgt;
   if (anim) {
     const b = ballAt(anim.res, anim.t);
-    dpos = [b[0] * 0.8, 6 + Math.min(b[1] * 0.08, 3), Math.max(-9, b[2] - 18)];
-    dtgt = [b[0], b[1] * 0.65 + 0.5, b[2] + 4];
+    dpos = [b[0] * 0.8, 9 + Math.min(b[1] * 0.08, 3), Math.max(-9, b[2] - 30)];
+    dtgt = [b[0], b[1] * 0.65 + 0.5, b[2] + 5];
   }
   const k = 1 - Math.exp(-dt * (anim ? 4.5 : 1.4));
   for (let i = 0; i < 3; i++) { cam.pos[i] = lerp(cam.pos[i], dpos[i], k); cam.tgt[i] = lerp(cam.tgt[i], dtgt[i], k); }
