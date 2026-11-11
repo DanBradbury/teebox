@@ -145,7 +145,7 @@ Carry is checked against TrackMan's published PGA Tour averages at 25 °C, sea l
 | LPGA Tour averages (used in the fit)       | 11    | 1.9 yd           | 4.9 yd  |
 | OpenFairway reference set (not in the fit) | 175   | 2.0 yd           | 12.4 yd |
 
-The third row is the check that matters most. It is 175 shots from 55 to 135 mph, including chips, thin
+The third row is the check that matters most. It is 175 shots from 47 to 150 mph, including chips, thin
 shots and low-spin drives, with reference carries from the calibration data of the
 [OpenFairway](https://github.com/digitalhand/openfairway) project. None of them were used to set the
 constants, and the mean error has no bias long or short (0.0 yd). Those reference carries come from another

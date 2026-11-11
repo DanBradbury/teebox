@@ -94,7 +94,7 @@ roll on turf. It is not a lookup of typical distances, so it handles a thin 7-ir
 same way it handles a good one.
 
 - Carry is within about 3 yards on average of TrackMan's published PGA and LPGA Tour numbers for every club
-  from driver to wedge, and within 2 yards on average of 175 reference shots from 55 to 135 mph that were
+  from driver to wedge, and within 2 yards on average of 175 reference shots from 47 to 150 mph that were
   not used to build the model.
 - The driver is the weakest club: about 6 yards short of the tour average.
 - Roll-out is an estimate. It depends on the turf preset you pick, and real fairways vary more than that.
