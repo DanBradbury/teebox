@@ -14,6 +14,7 @@ It speaks the **GSPro Open Connect** protocol on TCP port 921, so it works with 
 ## Features
 
 - Ball flight animation with a broadcast-style camera, carry callout, then total distance with roll
+- Single 10 × 10 yard target green with a pin; set its distance in the main panel (25–400 yards)
 - Last-shot panel: ball speed, launch angle and direction, back/side/total spin, spin axis, hang time, landing speed, angle and spin
 - Physics-based ball flight: lift and drag from spin ratio and Reynolds number, spin decay, and a friction-based bounce and roll
 - Playing conditions: temperature, altitude, humidity, wind and turf firmness all change the flight
@@ -31,6 +32,7 @@ Install [Node.js](https://nodejs.org) (LTS), then:
 **macOS / Linux:** `npm start`, then open http://localhost:3000.
 
 Click **Simulate shot** (or press Space) to try it without a launch monitor.
+Set **Pin distance** in the top-left panel to move the target green. Your choice is remembered in this browser.
 
 ## Connect your launch monitor
 

@@ -17,8 +17,9 @@
   .badge { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--dim); }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: #c0453f; box-shadow: 0 0 8px currentColor; }
   .dot.wait { background: #e0b341; } .dot.ok { background: #46d06a; }
-  select, button { font: inherit; font-size: 14px; color: var(--fg); background: rgba(255,255,255,.08);
+  select, button, #targetDistance { font: inherit; font-size: 14px; color: var(--fg); background: rgba(255,255,255,.08);
     border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; cursor: pointer; }
+  #targetDistance { width: 72px; user-select: text; }
   button:hover, select:hover { background: rgba(255,255,255,.16); }
   button.primary { background: #2f8f48; border-color: #3fbf63; font-weight: 600; }
   button.primary:hover { background: #38a655; }
@@ -61,6 +62,11 @@
     <label class="badge" for="club">Club</label>
     <select id="club"></select>
     <select id="speed" title="Playback speed"><option value="1">1×</option><option value="2">2×</option><option value="0.5">0.5×</option></select>
+  </div>
+  <div class="row">
+    <label class="badge" for="targetDistance">Pin distance</label>
+    <input id="targetDistance" type="number" min="25" max="400" step="1" value="150" aria-label="Pin distance in yards">
+    <span class="badge">yd</span>
   </div>
   <div class="row">
     <button class="primary" id="simBtn">Simulate shot</button>
@@ -148,10 +154,20 @@ function fillPoly(pts, style, stroke) {
   ctx.beginPath(); s.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
   ctx.fillStyle = style; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
 }
-const circle = (cx, cz, r, n = 36) => Array.from({ length: n }, (_, i) => [cx + r*Math.cos(i/n*6.2832), 0.02, cz + r*Math.sin(i/n*6.2832)]);
-
 // ---------- scene ----------
-const TARGETS = [50, 100, 150, 200, 250, 300];   // yards, centre-line greens
+const DEFAULT_TARGET_YD = 150;
+let targetYd = DEFAULT_TARGET_YD;
+try {
+  const saved = Number(localStorage.getItem('teebox.targetYd'));
+  if (Number.isFinite(saved) && saved >= 25 && saved <= 400) targetYd = Math.round(saved);
+} catch (e) { /* storage unavailable */ }
+$('#targetDistance').value = targetYd;
+$('#targetDistance').onchange = (e) => {
+  const value = Number(e.target.value);
+  targetYd = Number.isFinite(value) && e.target.value !== '' ? Math.round(Math.max(25, Math.min(400, value))) : DEFAULT_TARGET_YD;
+  e.target.value = targetYd;
+  try { localStorage.setItem('teebox.targetYd', String(targetYd)); } catch (err) { /* storage unavailable */ }
+};
 // Fixed landscape detail keeps the scenery stable while the camera follows a shot.
 const noise = (n) => { const x = Math.sin(n * 127.1 + 78.23) * 43758.5453; return x - Math.floor(x); };
 const trees = [];
@@ -277,12 +293,10 @@ function drawScene(now) {
     ctx.beginPath(); ctx.moveTo(p.x - size * .5, p.y); ctx.lineTo(p.x, p.y - size); ctx.stroke();
   }
 
-  // target greens
-  for (const y of TARGETS) {
-    const r = 7 + y * 0.025;
-    fillPoly(circle(0, y*YD, r*1.25), '#437d40');
-    fillPoly(circle(0, y*YD, r), '#78ac65', 'rgba(225,245,205,.35)');
-  }
+  // One 10 × 10 yard green, centred on the pin.
+  const halfGreen = 5 * YD, pinZ = targetYd * YD;
+  fillPoly([[-halfGreen, .02, pinZ - halfGreen], [halfGreen, .02, pinZ - halfGreen],
+    [halfGreen, .02, pinZ + halfGreen], [-halfGreen, .02, pinZ + halfGreen]], '#78ac65', 'rgba(225,245,205,.45)');
   // haze near horizon
   const hz = ctx.createLinearGradient(0, hy - 12, 0, hy + 85);
   hz.addColorStop(0, 'rgba(217,226,206,.38)'); hz.addColorStop(1, 'rgba(217,226,206,0)');
@@ -290,13 +304,7 @@ function drawScene(now) {
 
   trees.forEach(drawTree);
 
-  // sorted upright objects (signs + flags), far to near
-  const objs = [];
-  for (const y of TARGETS) {
-    objs.push({ z: y*YD, draw: () => drawFlag(0, y*YD) });
-    for (const sx of [-34, 34]) objs.push({ z: y*YD, draw: () => drawSign(sx, y*YD, y) });
-  }
-  objs.sort((a, b) => b.z - a.z).forEach((o) => o.draw());
+  drawFlag(0, pinZ);
 
   // tee mat
   fillPoly([[-1.1, 0, -1], [1.1, 0, -1], [1.1, 0, 1], [-1.1, 0, 1]], '#1c5a2b', '#0e2e16');
@@ -309,18 +317,6 @@ function drawFlag(x, z) {
   const fh = (b.y - t.y) * 0.28;
   ctx.fillStyle = '#e63946'; ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(t.x + fh*1.5, t.y + fh*0.5); ctx.lineTo(t.x, t.y + fh); ctx.fill();
 }
-function drawSign(x, z, yd) {
-  const bl = project([x - 2.2, 1.2, z]), tr = project([x + 2.2, 3.8, z]), g = project([x, 0, z]);
-  if (!bl || !tr || !g) return;
-  ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = Math.max(1, focal * 0.12 / g.z);
-  ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(g.x, bl.y); ctx.stroke();
-  ctx.fillStyle = '#f6f6f2'; ctx.fillRect(bl.x, tr.y, tr.x - bl.x, bl.y - tr.y);
-  ctx.strokeStyle = '#1b3b8a'; ctx.lineWidth = Math.max(1, (tr.x - bl.x) * 0.04); ctx.strokeRect(bl.x, tr.y, tr.x - bl.x, bl.y - tr.y);
-  const fs = (bl.y - tr.y) * 0.62;
-  if (fs > 5) { ctx.fillStyle = '#1b3b8a'; ctx.font = `700 ${fs}px "Segoe UI", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(yd), (bl.x + tr.x) / 2, (bl.y + tr.y) / 2 + fs * 0.04); }
-}
-
 // ---------- shot animation ----------
 let anim = null;          // { res, t0, shot, carryShown, endShown, endedAt }
 const markers = [];       // landing markers { x, z, color }
@@ -374,10 +370,10 @@ function camUpdate(dt) {
   let dpos = HOME.pos, dtgt = HOME.tgt;
   if (anim) {
     const b = ballAt(anim.res, anim.t);
-    dpos = [b[0] * 0.05, 2.6 + Math.min(b[1] * 0.12, 4), -9 + b[2] * 0.1];
-    dtgt = [b[0] * 0.85, b[1] * 0.55 + 2, b[2]];
+    dpos = [b[0] * 0.8, 6 + Math.min(b[1] * 0.08, 3), Math.max(-9, b[2] - 18)];
+    dtgt = [b[0], b[1] * 0.65 + 0.5, b[2] + 4];
   }
-  const k = 1 - Math.exp(-dt * (anim ? 2.2 : 1.4));
+  const k = 1 - Math.exp(-dt * (anim ? 4.5 : 1.4));
   for (let i = 0; i < 3; i++) { cam.pos[i] = lerp(cam.pos[i], dpos[i], k); cam.tgt[i] = lerp(cam.tgt[i], dtgt[i], k); }
 }
 
