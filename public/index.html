@@ -152,35 +152,143 @@ const circle = (cx, cz, r, n = 36) => Array.from({ length: n }, (_, i) => [cx + 
 
 // ---------- scene ----------
 const TARGETS = [50, 100, 150, 200, 250, 300];   // yards, centre-line greens
+// Fixed landscape detail keeps the scenery stable while the camera follows a shot.
+const noise = (n) => { const x = Math.sin(n * 127.1 + 78.23) * 43758.5453; return x - Math.floor(x); };
+const trees = [];
+for (let i = 0; i < 58; i++) {
+  const z = 35 + i * 8.2;
+  for (const side of [-1, 1]) {
+    trees.push({ x: side * (59 + noise(i * 17 + side) * 35), z: z + noise(i * 11 + side) * 7,
+      h: 8 + noise(i * 29 + side) * 8, shade: noise(i * 37 + side) });
+  }
+}
+trees.sort((a, b) => b.z - a.z);
+const grass = Array.from({ length: 520 }, (_, i) => ({
+  x: (noise(i * 19 + 3) - .5) * 94,
+  z: 4 + noise(i * 23 + 7) * 165,
+  height: .07 + noise(i * 31 + 9) * .18,
+  light: noise(i * 41 + 11) > .5
+}));
+
+function drawMountains(hy) {
+  // Three ridges with wide valley opening behind the range.
+  const layers = [
+    { base: '#a4b8ba', peak: .18, shift: 1.4, detail: .016 },
+    { base: '#718d88', peak: .22, shift: 5.7, detail: .022 },
+    { base: '#466d62', peak: .16, shift: 9.8, detail: .017 }
+  ];
+  layers.forEach((layer, li) => {
+    const points = [];
+    const steps = Math.max(48, Math.ceil(W / 18));
+    for (let i = 0; i <= steps; i++) {
+      const u = i / steps, side = Math.abs(u - .5) * 2;
+      const valley = .38 + .62 * Math.pow(side, 1.3);
+      const folds = Math.sin(u * 18 + layer.shift) * .22 + Math.sin(u * 43 + layer.shift * 1.7) * .10;
+      const crags = (noise(i * .73 + li * 91) - .5) * layer.detail * H;
+      points.push([u * W, hy - H * layer.peak * (valley + folds) + crags]);
+    }
+    const grad = ctx.createLinearGradient(0, hy - H * layer.peak, 0, hy + 25);
+    grad.addColorStop(0, layer.base);
+    grad.addColorStop(1, ['#c2d0c9', '#91aaa0', '#527e63'][li]);
+    ctx.beginPath(); ctx.moveTo(0, hy + 30);
+    points.forEach(([x, y]) => ctx.lineTo(x, y));
+    ctx.lineTo(W, hy + 30); ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+    if (li === 0) {
+      // Pale rock faces catch light on distant peaks.
+      ctx.strokeStyle = 'rgba(235,238,228,.42)'; ctx.lineWidth = 1.5;
+      for (let i = 5; i < points.length - 5; i += 7) {
+        const [x, y] = points[i];
+        ctx.beginPath(); ctx.moveTo(x - 8, y + 2); ctx.lineTo(x, y + 12 + noise(i) * 18);
+        ctx.lineTo(x + 7, y + 23 + noise(i + 3) * 18); ctx.stroke();
+      }
+    }
+  });
+}
+
+function drawTree(tree) {
+  const foot = project([tree.x, 0, tree.z]);
+  const top = project([tree.x, tree.h, tree.z]);
+  if (!foot || !top) return;
+  const h = foot.y - top.y, w = h * .38;
+  if (h < 2 || foot.x < -w || foot.x > W + w) return;
+  ctx.fillStyle = 'rgba(21,50,27,.16)';
+  ctx.beginPath(); ctx.ellipse(foot.x + w * .5, foot.y, w * 1.25, Math.max(1, w * .17), 0, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = 'rgba(25,43,34,.55)';
+  ctx.fillRect(foot.x - Math.max(1, w * .08), foot.y - h * .34, Math.max(2, w * .16), h * .35);
+  const shade = tree.shade;
+  ctx.fillStyle = shade < .33 ? '#284e3a' : shade < .67 ? '#315a40' : '#3c6847';
+  ctx.beginPath();
+  ctx.moveTo(foot.x, top.y);
+  ctx.lineTo(foot.x + w * .56, top.y + h * .34);
+  ctx.lineTo(foot.x + w * .38, top.y + h * .32);
+  ctx.lineTo(foot.x + w * .85, top.y + h * .69);
+  ctx.lineTo(foot.x + w * .56, top.y + h * .66);
+  ctx.lineTo(foot.x + w, top.y + h * .85);
+  ctx.lineTo(foot.x - w, top.y + h * .85);
+  ctx.lineTo(foot.x - w * .56, top.y + h * .66);
+  ctx.lineTo(foot.x - w * .85, top.y + h * .69);
+  ctx.lineTo(foot.x - w * .38, top.y + h * .32);
+  ctx.lineTo(foot.x - w * .56, top.y + h * .34);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(155,190,125,.13)';
+  ctx.beginPath(); ctx.moveTo(foot.x, top.y + h * .05);
+  ctx.lineTo(foot.x - w * .48, top.y + h * .69);
+  ctx.lineTo(foot.x - w * .15, top.y + h * .67); ctx.closePath(); ctx.fill();
+}
+
 function drawScene(now) {
   // horizon
   const fh = norm([B.f[0], 0, B.f[2]]);
   const hp = project([cam.pos[0] + fh[0]*8000, cam.pos[1], cam.pos[2] + fh[2]*8000]);
   const hy = hp ? hp.y : (B.f[1] > 0 ? H : 0);
   const sky = ctx.createLinearGradient(0, 0, 0, Math.max(hy, 1));
-  sky.addColorStop(0, '#4f8fd1'); sky.addColorStop(1, '#cfe6f5');
+  sky.addColorStop(0, '#47779b'); sky.addColorStop(.58, '#8fb7ca'); sky.addColorStop(1, '#e0e5d5');
   ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#2d6a2c'; ctx.fillRect(0, hy, W, H - hy);   // rough
+  const glow = ctx.createRadialGradient(W * .75, hy - H * .31, 8, W * .75, hy - H * .31, H * .45);
+  glow.addColorStop(0, 'rgba(255,244,206,.30)'); glow.addColorStop(1, 'rgba(255,244,206,0)');
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, W, hy);
+  drawMountains(hy);
+  const rough = ctx.createLinearGradient(0, hy, 0, H);
+  rough.addColorStop(0, '#648d62'); rough.addColorStop(1, '#315e32');
+  ctx.fillStyle = rough; ctx.fillRect(0, hy, W, H - hy);
 
-  // fairway bands every 10 yd
+  // Raised shoulders frame the flat hitting area and break up the broad rough.
+  for (const side of [-1, 1]) {
+    fillPoly([[side*48, 0, -35], [side*165, 11, -35], [side*165, 11, 520], [side*48, 0, 520]], '#3d6940');
+    fillPoly([[side*53, .03, -35], [side*100, 3.5, -35], [side*100, 3.5, 520], [side*53, .03, 520]], '#537c4a');
+  }
+
+  // Mowing bands stay subtle so targets and ball flight remain easy to read.
   for (let i = -3; i < 46; i++) {
     const z0 = i * 10 * YD, z1 = z0 + 10 * YD;
-    fillPoly([[-48, 0, z0], [48, 0, z0], [48, 0, z1], [-48, 0, z1]], i % 2 ? '#3d8a38' : '#46963f');
+    fillPoly([[-48, 0, z0], [48, 0, z0], [48, 0, z1], [-48, 0, z1]], i % 2 ? '#548c4b' : '#5b934f');
   }
   // edge rough stripe
-  fillPoly([[-48, 0, -30], [-52, 0, -30], [-52, 0, 420], [-48, 0, 420]], '#275f27');
-  fillPoly([[48, 0, -30], [52, 0, -30], [52, 0, 420], [48, 0, 420]], '#275f27');
+  fillPoly([[-48, 0, -30], [-52, 0, -30], [-52, 0, 520], [-48, 0, 520]], '#356b37');
+  fillPoly([[48, 0, -30], [52, 0, -30], [52, 0, 520], [48, 0, 520]], '#356b37');
+
+  // Small grass highlights soften the broad painted fairway without hiding shots.
+  ctx.lineWidth = 1;
+  for (const blade of grass) {
+    const p = project([blade.x, .03, blade.z]);
+    if (!p || p.x < 0 || p.x > W || p.y < hy || p.y > H) continue;
+    const size = Math.min(5, Math.max(.4, focal * blade.height / p.z));
+    ctx.strokeStyle = blade.light ? 'rgba(204,227,152,.17)' : 'rgba(29,73,34,.14)';
+    ctx.beginPath(); ctx.moveTo(p.x - size * .5, p.y); ctx.lineTo(p.x, p.y - size); ctx.stroke();
+  }
 
   // target greens
   for (const y of TARGETS) {
     const r = 7 + y * 0.025;
-    fillPoly(circle(0, y*YD, r*1.25), '#2f7d34');
-    fillPoly(circle(0, y*YD, r), '#58b85b', 'rgba(255,255,255,.35)');
+    fillPoly(circle(0, y*YD, r*1.25), '#437d40');
+    fillPoly(circle(0, y*YD, r), '#78ac65', 'rgba(225,245,205,.35)');
   }
   // haze near horizon
-  const hz = ctx.createLinearGradient(0, hy - 6, 0, hy + 130);
-  hz.addColorStop(0, 'rgba(207,230,245,.95)'); hz.addColorStop(1, 'rgba(207,230,245,0)');
-  ctx.fillStyle = hz; ctx.fillRect(0, hy - 6, W, 136);
+  const hz = ctx.createLinearGradient(0, hy - 12, 0, hy + 85);
+  hz.addColorStop(0, 'rgba(217,226,206,.38)'); hz.addColorStop(1, 'rgba(217,226,206,0)');
+  ctx.fillStyle = hz; ctx.fillRect(0, hy - 12, W, 97);
+
+  trees.forEach(drawTree);
 
   // sorted upright objects (signs + flags), far to near
   const objs = [];
