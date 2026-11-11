@@ -44,6 +44,11 @@
   #mini .cap { font-size: 11px; color: var(--dim); text-align: center; margin-top: 4px; letter-spacing: .08em; text-transform: uppercase; }
   .hint { font-size: 12px; color: var(--dim); }
   kbd { background: rgba(255,255,255,.12); border-radius: 4px; padding: 1px 6px; }
+  details summary { cursor: pointer; font-size: 13px; color: var(--dim); }
+  .cond { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; margin-top: 8px; font-size: 13px; color: var(--dim); }
+  .cond input, .cond select { width: 100%; font: inherit; font-size: 13px; color: var(--fg); background: rgba(255,255,255,.08);
+    border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; user-select: text; }
+  .cond option, #top select option { color: #111; }
 </style>
 </head>
 <body>
@@ -62,6 +67,20 @@
     <button id="csvBtn">Export CSV</button>
     <button id="clearBtn">Clear</button>
   </div>
+  <details id="condBox">
+    <summary>Conditions <span id="condSum"></span></summary>
+    <div class="cond">
+      <label for="cTemp">Temperature °F</label><input id="cTemp" type="number" min="-20" max="130" step="1">
+      <label for="cAlt">Altitude ft</label><input id="cAlt" type="number" min="-1000" max="15000" step="100">
+      <label for="cHum">Humidity %</label><input id="cHum" type="number" min="0" max="100" step="5">
+      <label for="cWind">Wind mph</label><input id="cWind" type="number" min="0" max="60" step="1">
+      <label for="cFrom">Wind</label><select id="cFrom">
+        <option value="0">Into (headwind)</option><option value="45">Into, from right</option><option value="90">From right</option>
+        <option value="135">Helping, from right</option><option value="180">Helping (tailwind)</option><option value="225">Helping, from left</option>
+        <option value="270">From left</option><option value="315">Into, from left</option></select>
+      <label for="cTurf">Turf</label><select id="cTurf"></select>
+    </div>
+  </details>
   <div class="hint"><kbd>Space</kbd> = simulated shot · real shots arrive automatically</div>
 </div>
 
@@ -291,7 +310,8 @@ function setData(s, res) {
     ['Launch direction', fmt(Math.abs(s.hla), 1) + '° ' + (s.hla < 0 ? 'L' : s.hla > 0 ? 'R' : '')],
     ['Back spin', fmt(s.backspin) + ' rpm'], ['Side spin', fmt(Math.abs(s.sidespin)) + ' rpm ' + (s.sidespin < 0 ? 'L' : s.sidespin > 0 ? 'R' : '')],
     ['Total spin', fmt(s.total) + ' rpm'], ['Spin axis', fmt(s.axis, 1) + '°'],
-    ['Hang time', fmt(res.hangTime, 1) + ' s'], ['Land speed', fmt(res.landSpeed) + ' mph']];
+    ['Hang time', fmt(res.hangTime, 1) + ' s'], ['Land speed', fmt(res.landSpeed) + ' mph'],
+    ['Land angle', fmt(res.landAngle, 1) + '°'], ['Land spin', fmt(res.landSpin) + ' rpm']];
   $('#dataGrid').innerHTML = rows.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
 }
 
@@ -327,7 +347,7 @@ function drawMini() {
 // ---------- shot entry ----------
 function handleShot(s) {
   if (!s.club) s.club = $('#club').value;
-  const res = P.simulate(s);
+  const res = P.simulate(s, conditions());
   res.shot = s;
   setData(s, res);
   $('#result').classList.remove('show');
@@ -337,12 +357,35 @@ function handleShot(s) {
   if (s.source === 'sim') { /* sim shots use the club dropdown */ }
 }
 
+// ---------- playing conditions (kept in this browser) ----------
+const COND_DEFAULT = { tempF: 70, altitudeFt: 0, humidity: 50, windMph: 0, windFrom: 0, surface: 'fairway' };
+const COND_FIELDS = { tempF: '#cTemp', altitudeFt: '#cAlt', humidity: '#cHum', windMph: '#cWind', windFrom: '#cFrom', surface: '#cTurf' };
+let cond = { ...COND_DEFAULT };
+try { cond = { ...cond, ...JSON.parse(localStorage.getItem('teebox.conditions') || '{}') }; } catch (e) { /* storage unavailable */ }
+if (!P.SURFACES[cond.surface]) cond.surface = COND_DEFAULT.surface;
+for (const [k, v] of Object.entries(P.SURFACES)) $('#cTurf').add(new Option(v.label, k));
+function conditions() { return cond; }
+function showConditions() {
+  const air = P.atmosphere(cond);
+  $('#condSum').textContent = `· ${fmt(cond.tempF)}°F · ${fmt(cond.altitudeFt)} ft${cond.windMph ? ` · wind ${fmt(cond.windMph)} mph` : ''} · air ${air.rho.toFixed(3)} kg/m³`;
+}
+for (const [k, sel] of Object.entries(COND_FIELDS)) {
+  const el = $(sel); el.value = cond[k];
+  el.onchange = () => {
+    if (k === 'surface') cond[k] = el.value;
+    else { const n = parseFloat(el.value); cond[k] = Number.isFinite(n) ? Math.min(+el.max || n, Math.max(+el.min || 0, n)) : COND_DEFAULT[k]; el.value = cond[k]; }
+    try { localStorage.setItem('teebox.conditions', JSON.stringify(cond)); } catch (e) { /* storage unavailable */ }
+    showConditions();
+  };
+}
+showConditions();
+
 // ---------- UI wiring ----------
 for (const c of Object.keys(P.CLUBS)) $('#club').add(new Option(c, c, false, c === '7i'));
 $('#speed').onchange = (e) => (playSpeed = parseFloat(e.target.value));
 const simulate = () => { const s = P.randomShot($('#club').value); s.source = 'sim'; handleShot(s); };
 $('#simBtn').onclick = simulate;
-addEventListener('keydown', (e) => { if (e.code === 'Space' && !/SELECT|BUTTON/.test(document.activeElement.tagName)) { e.preventDefault(); simulate(); } });
+addEventListener('keydown', (e) => { if (e.code === 'Space' && !/SELECT|BUTTON|INPUT|SUMMARY/.test(document.activeElement.tagName)) { e.preventDefault(); simulate(); } });
 $('#clearBtn').onclick = () => { history.length = 0; markers.length = 0; anim = null; renderHistory(); drawMini(); $('#dataGrid').innerHTML = ''; $('#result').classList.remove('show'); };
 $('#csvBtn').onclick = () => {
   const head = 'shot,club,source,ball_mph,vla,hla,backspin,sidespin,carry_yd,total_yd,offline_yd,apex_ft\n';
