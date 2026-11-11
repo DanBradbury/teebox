@@ -1,0 +1,14 @@
+{
+  "name": "teebox",
+  "version": "0.1.0",
+  "description": "A lightweight, dependency-free driving range visualizer for launch monitors that speak the GSPro Open Connect protocol.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=18" },
+  "keywords": ["golf", "driving-range", "launch-monitor", "skytrak", "gspro", "open-connect", "visualizer"],
+  "license": "MIT",
+  "private": false
+}

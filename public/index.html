@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Driving Range</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --panel: rgba(12,20,16,.72); --line: rgba(255,255,255,.14); --fg: #eef5ee; --dim: #9fb3a3; --accent: #7fe08a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1a12; color: var(--fg);
+    font-family: "Segoe UI", system-ui, sans-serif; user-select: none; }
+  canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    backdrop-filter: blur(6px); padding: 12px 14px; }
+  #top { top: 12px; left: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 250px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .badge { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--dim); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #c0453f; box-shadow: 0 0 8px currentColor; }
+  .dot.wait { background: #e0b341; } .dot.ok { background: #46d06a; }
+  select, button { font: inherit; font-size: 14px; color: var(--fg); background: rgba(255,255,255,.08);
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; cursor: pointer; }
+  button:hover, select:hover { background: rgba(255,255,255,.16); }
+  button.primary { background: #2f8f48; border-color: #3fbf63; font-weight: 600; }
+  button.primary:hover { background: #38a655; }
+  #data { top: 12px; right: 12px; width: 230px; }
+  #data h3, #hist h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 1fr auto; gap: 5px 10px; font-size: 14px; }
+  .grid span:nth-child(odd) { color: var(--dim); }
+  .grid span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  #result { position: fixed; top: 14%; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none;
+    text-shadow: 0 2px 12px rgba(0,0,0,.7); opacity: 0; transition: opacity .25s; }
+  #result.show { opacity: 1; }
+  #result .big { font-size: 54px; font-weight: 700; letter-spacing: .02em; }
+  #result .big small { font-size: 22px; font-weight: 500; color: #d7e8d9; }
+  #result .sub { font-size: 20px; color: #e6f1e7; margin-top: 2px; }
+  #hist { bottom: 12px; left: 12px; width: 470px; max-height: 38vh; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th { text-align: right; color: var(--dim); font-weight: 600; padding: 2px 6px; position: sticky; top: 0; background: #101a14; }
+  td { text-align: right; padding: 3px 6px; border-top: 1px solid rgba(255,255,255,.06); }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  tr.last td { color: var(--accent); }
+  #mini { bottom: 12px; right: 12px; padding: 8px; }
+  #mini canvas { display: block; }
+  #mini .cap { font-size: 11px; color: var(--dim); text-align: center; margin-top: 4px; letter-spacing: .08em; text-transform: uppercase; }
+  .hint { font-size: 12px; color: var(--dim); }
+  kbd { background: rgba(255,255,255,.12); border-radius: 4px; padding: 1px 6px; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div class="panel" id="top">
+  <div class="badge"><span class="dot" id="srvDot"></span><span id="srvTxt">Connecting to app…</span></div>
+  <div class="badge"><span class="dot" id="lmDot"></span><span id="lmTxt">Launch monitor: not connected</span></div>
+  <div class="row">
+    <label class="badge" for="club">Club</label>
+    <select id="club"></select>
+    <select id="speed" title="Playback speed"><option value="1">1×</option><option value="2">2×</option><option value="0.5">0.5×</option></select>
+  </div>
+  <div class="row">
+    <button class="primary" id="simBtn">Simulate shot</button>
+    <button id="csvBtn">Export CSV</button>
+    <button id="clearBtn">Clear</button>
+  </div>
+  <div class="hint"><kbd>Space</kbd> = simulated shot · real shots arrive automatically</div>
+</div>
+
+<div class="panel" id="data">
+  <h3>Last shot</h3>
+  <div class="grid" id="dataGrid"></div>
+</div>
+
+<div id="result"><div class="big" id="resBig"></div><div class="sub" id="resSub"></div></div>
+
+<div class="panel" id="hist">
+  <h3>Session</h3>
+  <table>
+    <thead><tr><th>#</th><th>Club</th><th>Ball</th><th>Carry</th><th>Total</th><th>Offline</th><th>Apex</th></tr></thead>
+    <tbody id="histBody"></tbody>
+  </table>
+</div>
+
+<div class="panel" id="mini"><canvas id="mapc" width="190" height="270"></canvas><div class="cap">Dispersion (yd)</div></div>
+
+<script src="physics.js"></script>
+<script>
+const P = GolfPhysics, YD = P.YD;
+const $ = (s) => document.querySelector(s);
+const cv = $('#view'), ctx = cv.getContext('2d');
+const mapc = $('#mapc'), mctx = mapc.getContext('2d');
+let W, H, focal;
+
+// ---------- small vector helpers ----------
+const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
+const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const norm = (a) => { const l = Math.hypot(...a) || 1; return [a[0]/l, a[1]/l, a[2]/l]; };
+const lerp = (a, b, t) => a + (b - a) * t;
+const fmt = (x, d = 0) => (Number.isFinite(x) ? x.toFixed(d) : '–');
+
+function resize() {
+  const dpr = devicePixelRatio || 1;
+  W = innerWidth; H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  focal = H * 1.0;
+}
+addEventListener('resize', resize); resize();
+
+// ---------- camera ----------
+const HOME = { pos: [0, 2.6, -9], tgt: [0, -2, 100] };
+const cam = { pos: HOME.pos.slice(), tgt: HOME.tgt.slice() };
+let B;
+function updateBasis() { const f = norm(sub(cam.tgt, cam.pos)); const r = norm(cross([0,1,0], f)); B = { f, r, u: cross(f, r) }; }
+const toCam = (p) => { const d = sub(p, cam.pos); return [dot(d, B.r), dot(d, B.u), dot(d, B.f)]; };
+const scr = (c) => [W/2 + focal * c[0] / c[2], H/2 - focal * c[1] / c[2]];
+const NEAR = 0.3;
+function project(p) { const c = toCam(p); return c[2] < NEAR ? null : { x: W/2 + focal*c[0]/c[2], y: H/2 - focal*c[1]/c[2], z: c[2] }; }
+function polyScr(pts) {
+  const cs = pts.map(toCam), out = [];
+  for (let i = 0; i < cs.length; i++) {
+    const a = cs[i], b = cs[(i+1) % cs.length], ain = a[2] >= NEAR, bin = b[2] >= NEAR;
+    if (ain) out.push(a);
+    if (ain !== bin) { const t = (NEAR - a[2]) / (b[2] - a[2]); out.push([lerp(a[0], b[0], t), lerp(a[1], b[1], t), NEAR]); }
+  }
+  return out.map(scr);
+}
+function fillPoly(pts, style, stroke) {
+  const s = polyScr(pts); if (s.length < 3) return;
+  ctx.beginPath(); s.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
+  ctx.fillStyle = style; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+const circle = (cx, cz, r, n = 36) => Array.from({ length: n }, (_, i) => [cx + r*Math.cos(i/n*6.2832), 0.02, cz + r*Math.sin(i/n*6.2832)]);
+
+// ---------- scene ----------
+const TARGETS = [50, 100, 150, 200, 250, 300];   // yards, centre-line greens
+function drawScene(now) {
+  // horizon
+  const fh = norm([B.f[0], 0, B.f[2]]);
+  const hp = project([cam.pos[0] + fh[0]*8000, cam.pos[1], cam.pos[2] + fh[2]*8000]);
+  const hy = hp ? hp.y : (B.f[1] > 0 ? H : 0);
+  const sky = ctx.createLinearGradient(0, 0, 0, Math.max(hy, 1));
+  sky.addColorStop(0, '#4f8fd1'); sky.addColorStop(1, '#cfe6f5');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#2d6a2c'; ctx.fillRect(0, hy, W, H - hy);   // rough
+
+  // fairway bands every 10 yd
+  for (let i = -3; i < 46; i++) {
+    const z0 = i * 10 * YD, z1 = z0 + 10 * YD;
+    fillPoly([[-48, 0, z0], [48, 0, z0], [48, 0, z1], [-48, 0, z1]], i % 2 ? '#3d8a38' : '#46963f');
+  }
+  // edge rough stripe
+  fillPoly([[-48, 0, -30], [-52, 0, -30], [-52, 0, 420], [-48, 0, 420]], '#275f27');
+  fillPoly([[48, 0, -30], [52, 0, -30], [52, 0, 420], [48, 0, 420]], '#275f27');
+
+  // target greens
+  for (const y of TARGETS) {
+    const r = 7 + y * 0.025;
+    fillPoly(circle(0, y*YD, r*1.25), '#2f7d34');
+    fillPoly(circle(0, y*YD, r), '#58b85b', 'rgba(255,255,255,.35)');
+  }
+  // haze near horizon
+  const hz = ctx.createLinearGradient(0, hy - 6, 0, hy + 130);
+  hz.addColorStop(0, 'rgba(207,230,245,.95)'); hz.addColorStop(1, 'rgba(207,230,245,0)');
+  ctx.fillStyle = hz; ctx.fillRect(0, hy - 6, W, 136);
+
+  // sorted upright objects (signs + flags), far to near
+  const objs = [];
+  for (const y of TARGETS) {
+    objs.push({ z: y*YD, draw: () => drawFlag(0, y*YD) });
+    for (const sx of [-34, 34]) objs.push({ z: y*YD, draw: () => drawSign(sx, y*YD, y) });
+  }
+  objs.sort((a, b) => b.z - a.z).forEach((o) => o.draw());
+
+  // tee mat
+  fillPoly([[-1.1, 0, -1], [1.1, 0, -1], [1.1, 0, 1], [-1.1, 0, 1]], '#1c5a2b', '#0e2e16');
+  fillPoly([[-1.1, 0, -1.25], [1.1, 0, -1.25], [1.1, 0, -1], [-1.1, 0, -1]], '#22262a');
+}
+function drawFlag(x, z) {
+  const b = project([x, 0, z]), t = project([x, 6, z]); if (!b || !t) return;
+  const lw = Math.max(1, focal * 0.05 / b.z);
+  ctx.strokeStyle = '#f2f2f2'; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+  const fh = (b.y - t.y) * 0.28;
+  ctx.fillStyle = '#e63946'; ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(t.x + fh*1.5, t.y + fh*0.5); ctx.lineTo(t.x, t.y + fh); ctx.fill();
+}
+function drawSign(x, z, yd) {
+  const bl = project([x - 2.2, 1.2, z]), tr = project([x + 2.2, 3.8, z]), g = project([x, 0, z]);
+  if (!bl || !tr || !g) return;
+  ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = Math.max(1, focal * 0.12 / g.z);
+  ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(g.x, bl.y); ctx.stroke();
+  ctx.fillStyle = '#f6f6f2'; ctx.fillRect(bl.x, tr.y, tr.x - bl.x, bl.y - tr.y);
+  ctx.strokeStyle = '#1b3b8a'; ctx.lineWidth = Math.max(1, (tr.x - bl.x) * 0.04); ctx.strokeRect(bl.x, tr.y, tr.x - bl.x, bl.y - tr.y);
+  const fs = (bl.y - tr.y) * 0.62;
+  if (fs > 5) { ctx.fillStyle = '#1b3b8a'; ctx.font = `700 ${fs}px "Segoe UI", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(yd), (bl.x + tr.x) / 2, (bl.y + tr.y) / 2 + fs * 0.04); }
+}
+
+// ---------- shot animation ----------
+let anim = null;          // { res, t0, shot, carryShown, endShown, endedAt }
+const markers = [];       // landing markers { x, z, color }
+let playSpeed = 1;
+function ballAt(res, t) {
+  const pts = res.path;
+  if (t >= res.duration) { const l = pts[pts.length - 1]; return [l[1], l[2], l[3]]; }
+  let i = Math.min(pts.length - 2, Math.max(0, Math.floor(t / 0.02)));
+  while (i < pts.length - 2 && pts[i + 1][0] < t) i++;
+  const a = pts[i], b = pts[i + 1], k = (t - a[0]) / ((b[0] - a[0]) || 1);
+  return [lerp(a[1], b[1], k), lerp(a[2], b[2], k), lerp(a[3], b[3], k)];
+}
+function drawShot(now) {
+  // markers from earlier shots
+  markers.forEach((m, i) => {
+    const p = project([m.x, 0.05, m.z]); if (!p) return;
+    const r = Math.max(2, focal * 0.9 / p.z);
+    ctx.fillStyle = m.last ? '#ffd23f' : 'rgba(255,255,255,.55)'; ctx.strokeStyle = 'rgba(0,0,0,.4)';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, r * 1.6, r * 0.7, 0, 0, 6.2832); ctx.fill(); ctx.stroke();
+  });
+  if (!anim) return;
+  const t = anim.t;
+  const pos = ballAt(anim.res, t);
+  // trail
+  const pts = anim.res.path; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const trail = [];
+  for (let i = 0; i < pts.length && pts[i][0] <= t; i++) { const p = project([pts[i][1], pts[i][2], pts[i][3]]); if (p) trail.push(p); }
+  trail.push(project(pos));
+  const stroke = (w, c) => { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); let st = false;
+    trail.forEach((p) => { if (!p) return; if (!st) { ctx.moveTo(p.x, p.y); st = true; } else ctx.lineTo(p.x, p.y); }); ctx.stroke(); };
+  stroke(5, 'rgba(255,255,255,.18)'); stroke(1.8, 'rgba(255,255,255,.9)');
+  // shadow + ball
+  const sp = project([pos[0], 0, pos[2]]);
+  if (sp) { const r = Math.max(2, focal * 0.021 / sp.z * 1.2); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, r * 1.3, r * 0.5, 0, 0, 6.2832); ctx.fill(); }
+  const bp = project(pos);
+  if (bp) {
+    const r = Math.max(3.2, focal * 0.0214 / bp.z);
+    if (r < 7) { ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.beginPath(); ctx.arc(bp.x, bp.y, r * 2.6, 0, 6.2832); ctx.fill(); }
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(bp.x, bp.y, r, 0, 6.2832); ctx.fill(); ctx.stroke();
+  }
+  // carry marker label in 3D
+  if (anim.carryShown) {
+    const c = anim.res; const p = project([c.carryX * YD, 0.3, c.carryZ * YD]);
+    if (p) { const pulse = 1 + 0.15 * Math.sin(now / 160);
+      ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, Math.max(5, focal*2.2/p.z)*pulse, Math.max(2, focal*0.9/p.z)*pulse, 0, 0, 6.2832); ctx.stroke(); }
+  }
+}
+
+function camUpdate(dt) {
+  let dpos = HOME.pos, dtgt = HOME.tgt;
+  if (anim) {
+    const b = ballAt(anim.res, anim.t);
+    dpos = [b[0] * 0.05, 2.6 + Math.min(b[1] * 0.12, 4), -9 + b[2] * 0.1];
+    dtgt = [b[0] * 0.85, b[1] * 0.55 + 2, b[2]];
+  }
+  const k = 1 - Math.exp(-dt * (anim ? 2.2 : 1.4));
+  for (let i = 0; i < 3; i++) { cam.pos[i] = lerp(cam.pos[i], dpos[i], k); cam.tgt[i] = lerp(cam.tgt[i], dtgt[i], k); }
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (anim) {
+    anim.t = (now - anim.t0) / 1000 * playSpeed;
+    if (!anim.carryShown && anim.t >= anim.res.hangTime) { anim.carryShown = true; showResult('carry', anim); }
+    if (!anim.endShown && anim.t >= anim.res.duration) { anim.endShown = true; anim.endedAt = now; showResult('total', anim); }
+    if (anim.endShown && now - anim.endedAt > 3500) anim = null;
+  }
+  camUpdate(dt); updateBasis();
+  drawScene(now); drawShot(now);
+  requestAnimationFrame(frame);
+}
+updateBasis(); requestAnimationFrame(frame);
+
+// ---------- results / HUD ----------
+const side = (x) => (Math.abs(x) < 0.5 ? 'on line' : `${fmt(Math.abs(x))} ${x > 0 ? 'R' : 'L'}`);
+function showResult(kind, a) {
+  const r = a.res, el = $('#result');
+  if (kind === 'carry') {
+    $('#resBig').innerHTML = `${fmt(r.carryYd)} <small>yd carry</small>`;
+    $('#resSub').textContent = `Apex ${fmt(r.apexFt)} ft · ${side(r.carryX)} · lands at ${fmt(r.landAngle)}°`;
+  } else {
+    $('#resBig').innerHTML = `${fmt(r.totalYd)} <small>yd total</small>`;
+    $('#resSub').textContent = `Carry ${fmt(r.carryYd)} · rolled ${fmt(r.totalYd - r.carryYd)} · ${side(r.totalX)}`;
+    markers.forEach((m) => (m.last = false));
+    markers.push({ x: r.totalX * YD, z: r.totalZ * YD, last: true }); if (markers.length > 15) markers.shift();
+    drawMini();
+  }
+  el.classList.add('show');
+  clearTimeout(showResult.h); showResult.h = setTimeout(() => el.classList.remove('show'), kind === 'carry' ? 6500 : 5000);
+}
+function setData(s, res) {
+  const rows = [['Ball speed', fmt(s.speed, 1) + ' mph'], ['Launch angle', fmt(s.vla, 1) + '°'],
+    ['Launch direction', fmt(Math.abs(s.hla), 1) + '° ' + (s.hla < 0 ? 'L' : s.hla > 0 ? 'R' : '')],
+    ['Back spin', fmt(s.backspin) + ' rpm'], ['Side spin', fmt(Math.abs(s.sidespin)) + ' rpm ' + (s.sidespin < 0 ? 'L' : s.sidespin > 0 ? 'R' : '')],
+    ['Total spin', fmt(s.total) + ' rpm'], ['Spin axis', fmt(s.axis, 1) + '°'],
+    ['Hang time', fmt(res.hangTime, 1) + ' s'], ['Land speed', fmt(res.landSpeed) + ' mph']];
+  $('#dataGrid').innerHTML = rows.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+}
+
+// ---------- session history ----------
+const history = [];
+function addHistory(s, res) {
+  history.push({ n: history.length + 1, club: s.club || $('#club').value, speed: s.speed, vla: s.vla, hla: s.hla,
+    backspin: s.backspin, sidespin: s.sidespin, carry: res.carryYd, total: res.totalYd, off: res.carryX, apexFt: res.apexFt, src: s.source || 'sim' });
+  renderHistory();
+}
+function renderHistory() {
+  const body = $('#histBody');
+  body.innerHTML = history.slice().reverse().slice(0, 40).map((h, i) =>
+    `<tr class="${i === 0 ? 'last' : ''}"><td>${h.n}</td><td>${h.club}${h.src === 'sim' ? ' <span style="opacity:.4">sim</span>' : ''}</td><td>${fmt(h.speed)}</td><td>${fmt(h.carry)}</td><td>${fmt(h.total)}</td><td>${side(h.off)}</td><td>${fmt(h.apexFt)}ft</td></tr>`).join('');
+}
+
+// ---------- mini dispersion map ----------
+function drawMini() {
+  const w = mapc.width, h = mapc.height, pad = 14;
+  mctx.clearRect(0, 0, w, h); mctx.fillStyle = '#12301b'; mctx.fillRect(0, 0, w, h);
+  const maxZ = Math.max(300, Math.ceil(Math.max(...history.map((s) => s.total), 0) / 50) * 50 + 25);
+  const X = (x) => w / 2 + x * (w / 2 - pad) / 50, Z = (z) => h - pad - z * (h - 2 * pad) / maxZ;
+  mctx.strokeStyle = 'rgba(255,255,255,.15)'; mctx.fillStyle = 'rgba(255,255,255,.5)'; mctx.font = '10px Segoe UI'; mctx.lineWidth = 1;
+  for (let z = 50; z <= maxZ; z += 50) { mctx.beginPath(); mctx.moveTo(pad, Z(z)); mctx.lineTo(w - pad, Z(z)); mctx.stroke(); mctx.fillText(z, 2, Z(z) - 2); }
+  mctx.strokeStyle = 'rgba(255,255,255,.3)'; mctx.beginPath(); mctx.moveTo(w / 2, Z(0)); mctx.lineTo(w / 2, Z(maxZ)); mctx.stroke();
+  history.forEach((s, i) => {
+    const lastOne = i === history.length - 1;
+    mctx.fillStyle = lastOne ? '#ffd23f' : 'rgba(255,255,255,.7)';
+    mctx.beginPath(); mctx.arc(X(s.totalX ?? 0), Z(s.total), lastOne ? 4 : 2.6, 0, 6.2832); mctx.fill();
+  });
+}
+
+// ---------- shot entry ----------
+function handleShot(s) {
+  if (!s.club) s.club = $('#club').value;
+  const res = P.simulate(s);
+  res.shot = s;
+  setData(s, res);
+  $('#result').classList.remove('show');
+  anim = { res, shot: s, t0: performance.now(), t: 0, carryShown: false, endShown: false };
+  addHistory(s, res);
+  const h = history[history.length - 1]; h.totalX = res.totalX; h.total = res.totalYd;
+  if (s.source === 'sim') { /* sim shots use the club dropdown */ }
+}
+
+// ---------- UI wiring ----------
+for (const c of Object.keys(P.CLUBS)) $('#club').add(new Option(c, c, false, c === '7i'));
+$('#speed').onchange = (e) => (playSpeed = parseFloat(e.target.value));
+const simulate = () => { const s = P.randomShot($('#club').value); s.source = 'sim'; handleShot(s); };
+$('#simBtn').onclick = simulate;
+addEventListener('keydown', (e) => { if (e.code === 'Space' && !/SELECT|BUTTON/.test(document.activeElement.tagName)) { e.preventDefault(); simulate(); } });
+$('#clearBtn').onclick = () => { history.length = 0; markers.length = 0; anim = null; renderHistory(); drawMini(); $('#dataGrid').innerHTML = ''; $('#result').classList.remove('show'); };
+$('#csvBtn').onclick = () => {
+  const head = 'shot,club,source,ball_mph,vla,hla,backspin,sidespin,carry_yd,total_yd,offline_yd,apex_ft\n';
+  const csv = head + history.map((h) => [h.n, h.club, h.src, h.speed, h.vla, h.hla, h.backspin, h.sidespin, h.carry, h.total, h.off, h.apexFt].map((v) => typeof v === 'number' ? +v.toFixed(2) : v).join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'range-session.csv'; a.click();
+};
+drawMini(); renderHistory();
+
+// ---------- server connection ----------
+function setLm(st) {
+  const dot = $('#lmDot'), txt = $('#lmTxt');
+  if (!st.connected) { dot.className = 'dot'; txt.textContent = 'Launch monitor: not connected'; }
+  else if (st.ready) { dot.className = 'dot ok'; txt.textContent = `${st.device || 'Launch monitor'}: ready`; }
+  else { dot.className = 'dot wait'; txt.textContent = `${st.device || 'Launch monitor'}: connected, not ready`; }
+}
+if (location.protocol.startsWith('http')) {
+  const es = new EventSource('/events');
+  es.onopen = () => { $('#srvDot').className = 'dot ok'; };
+  es.onerror = () => { $('#srvDot').className = 'dot'; $('#srvTxt').textContent = 'App server offline (simulation only)'; };
+  es.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'status') { if (m.port) $('#srvTxt').textContent = `Listening on port ${m.port}`; setLm(m); }
+    else if (m.type === 'shot') { m.shot.source = 'launch-monitor'; handleShot(m.shot); }
+  };
+} else { $('#srvTxt').textContent = 'Opened as a file – run start.bat for launch monitor input'; }
+</script>
+</body>
+</html>
