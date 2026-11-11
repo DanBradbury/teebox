@@ -14,7 +14,9 @@ It speaks the **GSPro Open Connect** protocol on TCP port 921, so it works with 
 ## Features
 
 - Ball flight animation with a broadcast-style camera, carry callout, then total distance with roll
-- Last-shot panel: ball speed, launch angle and direction, back/side/total spin, spin axis, hang time, landing speed
+- Last-shot panel: ball speed, launch angle and direction, back/side/total spin, spin axis, hang time, landing speed, angle and spin
+- Physics-based ball flight: lift and drag from spin ratio and Reynolds number, spin decay, and a friction-based bounce and roll
+- Playing conditions: temperature, altitude, humidity, wind and turf firmness all change the flight
 - Session table, dispersion map, club tagging, CSV export
 - Built-in "Simulate shot" mode so you can try it with no hardware
 - Works offline. Nothing leaves your machine
@@ -77,7 +79,7 @@ Launch monitor ──USB──> vendor app + connector ──TCP :921 (JSON)─�
 ```
 
 - `server.js` listens for Open Connect JSON, replies `{"Code":200,...}`, and pushes each shot to the page over Server-Sent Events.
-- `public/physics.js` simulates drag, spin lift, bounce and roll from the launch data.
+- `public/physics.js` simulates the flight, bounce and roll from the launch data. The model is described in [docs/PHYSICS.md](docs/PHYSICS.md).
 - `public/index.html` draws the range on a plain 2D canvas with its own small perspective camera.
 
 Open Connect shot fields used: `BallData.Speed` (mph), `VLA`, `HLA` (degrees, right is positive),
@@ -86,10 +88,21 @@ Club data is ignored. Spec: https://gsprogolf.com/GSProConnectV1.html
 
 ## Accuracy
 
-The launch data comes from your launch monitor, but the ball flight is Teebox's own simplified
-model, tuned to roughly match tour-average numbers (a 171 mph driver carries about 285 yards). Expect
-carry and roll to differ from what your monitor's own software shows. Treat the ball flight as a
-visualization, not a measurement. Irons fly a little flat and roll-out is approximate.
+The launch data comes from your launch monitor. The ball flight is Teebox's own physics model: gravity,
+drag and spin lift computed from the ball's speed, its spin and the air it flies through, then a bounce and
+roll on turf. It is not a lookup of typical distances, so it handles a thin 7-iron or a low-spin drive the
+same way it handles a good one.
+
+- Carry is within about 3 yards on average of TrackMan's published PGA and LPGA Tour numbers for every club
+  from driver to wedge, and within 2 yards on average of 175 reference shots from 47 to 150 mph that were
+  not used to build the model.
+- The driver is the weakest club: about 6 yards short of the tour average.
+- Roll-out is an estimate. It depends on the turf preset you pick, and real fairways vary more than that.
+- Expect carry to differ a little from your monitor's own software. Each uses its own ball model.
+
+Open **Conditions** in the top-left panel to set temperature, altitude, humidity, wind and turf. They are
+remembered in your browser. [docs/PHYSICS.md](docs/PHYSICS.md) has the equations, the sources, the full
+comparison table and the known limits.
 
 ## Troubleshooting
 
@@ -103,7 +116,7 @@ visualization, not a measurement. Irons fly a little flat and roll-out is approx
 ## Development
 
 ```
-npm test      # physics sanity checks + protocol tests, no dependencies
+npm test      # physics checks against tour data + protocol tests, no dependencies
 npm start
 ```
 
@@ -119,6 +132,7 @@ npm start
 Teebox aims to stay tiny: one Node file, one HTML page, no dependencies. If you want something bigger, these
 open source projects cover related ground (check each one for how actively it is maintained):
 
+- [OpenFairway](https://github.com/digitalhand/openfairway): Godot golf sim with a detailed, calibrated C# ball physics addon. Its approach inspired Teebox's physics model
 - [OpenShotGolf](https://github.com/jhauck2/OpenShotGolf): Godot golf sim with a driving range mode and a GSPro Open Connect listener
 - [Open-Birdie](https://github.com/jordan-shilts/Open-Birdie): Electron + Three.js course simulator driven by any Open Connect launch monitor
 - [openGS](https://github.com/dmyoung1994/openGS): browser-based Three.js golf simulation with its own physics engine
