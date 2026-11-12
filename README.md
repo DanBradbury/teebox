@@ -15,6 +15,7 @@ It speaks the **GSPro Open Connect** protocol on TCP port 921, so it works with 
 
 - Ball flight animation with a broadcast-style camera, carry callout, then total distance with roll
 - Single 10 × 10 yard target green with a pin; set its distance in the main panel (25–400 yards)
+- Switch between driving range and imported course holes; choose course and hole from the main panel
 - Last-shot panel: ball speed, launch angle and direction, back/side/total spin, spin axis, hang time, landing speed, angle and spin
 - Physics-based ball flight: lift and drag from spin ratio and Reynolds number, spin decay, and a friction-based bounce and roll
 - Playing conditions: temperature, altitude, humidity, wind and turf firmness all change the flight
@@ -29,10 +30,25 @@ Install [Node.js](https://nodejs.org) (LTS), then:
 
 **Windows:** double-click `start.bat`. Your browser opens to http://localhost:3000.
 
-**macOS / Linux:** `npm start`, then open http://localhost:3000.
+**macOS:** double-click `start.command`, or run `./start.command` in Terminal. Server starts and browser opens automatically. Pass an Open Connect port as the first argument, as with `start.bat`.
+
+**Linux:** `npm start`, then open http://localhost:3000.
 
 Click **Simulate shot** (or press Space) to try it without a launch monitor.
 Set **Pin distance** in the top-left panel to move the target green. Your choice is remembered in this browser.
+
+## Course holes
+
+Choose **Course hole** under **Scene**, then select a course and hole. Ancil Hoffman GC's 18 holes are included with an offline USGS 3DEP height grid. Teebox rotates each hole's mapped tee-to-green line into the shot direction, draws ground elevations, and places mapped green and bunker points in the scene. Fairway width, green size, and tree positions remain visual estimates because the BlueGolf exports lack terrain outlines. Shots still use Teebox's existing flat-ground physics; their displayed paths are lifted over terrain for this visual pass, but elevation does not change carry, landing, or roll calculations.
+
+To add another course from Golfeo's BlueGolf exports:
+
+```
+node scripts/import-course.js /path/to/course_full.json /path/to/course_holes.geojson
+node scripts/import-elevation.js COURSE_HANDLE
+```
+
+First command writes a small course file under `public/courses/` and updates the local course catalog. Second downloads a roughly 4–5 metre sampled height grid from the public [USGS 3DEP elevation service](https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer) and embeds it in that course file. USGS source coverage varies; the command rejects incomplete coverage. Import requires an internet connection, but viewing imported terrain works offline. Re-importing a course replaces its file, so run elevation import again afterward. Reload Teebox to see new data.
 
 ## Connect your launch monitor
 
@@ -42,7 +58,7 @@ Verified working with an **original SkyTrak** (USB) running **SkyTrak app 5.4.12
 [OpenSkyPlus2](https://openskyplus2.github.io/OpenSkyPlus2/README-OpenSkyPlus2.html). It also lists SkyTrak+ and ST Max.
 OpenSkyPlus2 is a separate project and is not included here. Follow its install guide, then use this order:
 
-1. Start Teebox (`start.bat` / `npm start`). Wait for "Listening on port 921".
+1. Start Teebox (`start.bat` / `start.command` / `npm start`). Wait for "Listening on port 921".
 2. Make sure GSPro is **not** running. Only one program can use port 921.
 3. Plug in the SkyTrak while it is off, then turn it on.
 4. Launch SkyTrak from the **"SkyTrak (Admin)"** shortcut that OpenSkyPlus2 creates, and choose USB Mode.

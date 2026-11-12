@@ -1,0 +1,47 @@
+// GeoJSON longitude/latitude to Teebox world coordinates: metres right/downrange from tee.
+const CourseGeometry = (() => {
+  function sampleElevation(grid, lon, lat) {
+    if (!grid) return 0;
+    const gx = (lon - grid.west) / grid.lonStep;
+    const gy = (grid.north - lat) / grid.latStep;
+    if (gx < 0 || gy < 0 || gx > grid.width - 1 || gy > grid.height - 1) return null;
+    const x0 = Math.floor(gx), y0 = Math.floor(gy);
+    const x1 = Math.min(x0 + 1, grid.width - 1), y1 = Math.min(y0 + 1, grid.height - 1);
+    const a = gx - x0, b = gy - y0;
+    const at = (x, y) => grid.values[y * grid.width + x];
+    const corners = [at(x0, y0), at(x1, y0), at(x0, y1), at(x1, y1)];
+    if (!corners.every(Number.isFinite)) return null;
+    return (corners[0] * (1 - a) + corners[1] * a) * (1 - b) +
+      (corners[2] * (1 - a) + corners[3] * a) * b;
+  }
+  function holeWorld(hole, elevation = null) {
+    const line = hole.line;
+    const [lon0, lat0] = line[0];
+    const metresEast = 111320 * Math.cos(lat0 * Math.PI / 180);
+    const local = ([lon, lat]) => [(lon - lon0) * metresEast, (lat - lat0) * 111320];
+    const end = local(line[line.length - 1]);
+    const length = Math.hypot(...end);
+    if (length < 10) throw new Error('Hole tee and green must differ');
+    const forward = [end[0] / length, end[1] / length];
+    const point = (coord) => {
+      const [east, north] = local(coord);
+      return { x: east * forward[1] - north * forward[0], z: east * forward[0] + north * forward[1] };
+    };
+    const centerline = line.map(point);
+    const features = hole.features.map((feature) => ({ ...point(feature.coord), type: feature.type }));
+    const green = features.find((feature) => feature.type === 'green') || centerline[centerline.length - 1];
+    const teeHeight = sampleElevation(elevation, lon0, lat0);
+    const heightAt = (x, z) => {
+      if (!elevation || teeHeight === null) return 0;
+      const east = x * forward[1] + z * forward[0];
+      const north = -x * forward[0] + z * forward[1];
+      const elevationHere = sampleElevation(elevation, lon0 + east / metresEast, lat0 + north / 111320);
+      return elevationHere === null ? 0 : elevationHere - teeHeight;
+    };
+    return { ...hole, centerline, features, green, heightAt,
+      elevationSource: elevation?.source || null, teeElevation: teeHeight,
+      greenRise: heightAt(green.x, green.z) };
+  }
+  return { holeWorld, sampleElevation };
+})();
+if (typeof module !== 'undefined') module.exports = CourseGeometry;

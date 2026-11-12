@@ -43,6 +43,9 @@
   #mini { bottom: 12px; right: 12px; padding: 8px; }
   #mini canvas { display: block; }
   #mini .cap { font-size: 11px; color: var(--dim); text-align: center; margin-top: 4px; letter-spacing: .08em; text-transform: uppercase; }
+  #profile { top: 78px; right: 12px; padding: 9px; width: 230px; }
+  #profile[hidden] { display: none; }
+  #profile canvas { display: block; width: 210px; height: 105px; }
   .hint { font-size: 12px; color: var(--dim); }
   kbd { background: rgba(255,255,255,.12); border-radius: 4px; padding: 1px 6px; }
   details summary { cursor: pointer; font-size: 13px; color: var(--dim); }
@@ -50,6 +53,9 @@
   .cond input, .cond select { width: 100%; font: inherit; font-size: 13px; color: var(--fg); background: rgba(255,255,255,.08);
     border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; user-select: text; }
   .cond option, #top select option { color: #111; }
+  #courseControls { display: flex; flex-direction: column; gap: 8px; }
+  #courseControls[hidden], #rangeControls[hidden] { display: none; }
+  #courseNote { max-width: 240px; }
 </style>
 </head>
 <body>
@@ -63,10 +69,16 @@
     <select id="club"></select>
     <select id="speed" title="Playback speed"><option value="1">1×</option><option value="2">2×</option><option value="0.5">0.5×</option></select>
   </div>
-  <div class="row">
+  <div class="row"><label class="badge" for="sceneMode">Scene</label><select id="sceneMode"><option value="range">Driving range</option><option value="course">Course hole</option></select></div>
+  <div class="row" id="rangeControls">
     <label class="badge" for="targetDistance">Pin distance</label>
     <input id="targetDistance" type="number" min="25" max="400" step="1" value="150" aria-label="Pin distance in yards">
     <span class="badge">yd</span>
+  </div>
+  <div id="courseControls" hidden>
+    <div class="row"><label class="badge" for="courseSelect">Course</label><select id="courseSelect"></select></div>
+    <div class="row"><label class="badge" for="holeSelect">Hole</label><select id="holeSelect"></select><span class="badge" id="holeInfo"></span></div>
+    <div class="hint" id="courseNote">Loading course data…</div>
   </div>
   <div class="row">
     <button class="primary" id="simBtn">Simulate shot</button>
@@ -106,8 +118,10 @@
 </div>
 
 <div class="panel" id="mini"><canvas id="mapc" width="190" height="270"></canvas><div class="cap">Dispersion (yd)</div></div>
+<div class="panel" id="profile" hidden><div class="hint">HEIGHT VS TEE · TEE → GREEN</div><canvas id="profilec" width="210" height="105"></canvas></div>
 
 <script src="physics.js"></script>
+<script src="course.js"></script>
 <script>
 const P = GolfPhysics, YD = P.YD;
 const $ = (s) => document.querySelector(s);
@@ -168,6 +182,73 @@ $('#targetDistance').onchange = (e) => {
   e.target.value = targetYd;
   try { localStorage.setItem('teebox.targetYd', String(targetYd)); } catch (err) { /* storage unavailable */ }
 };
+let sceneMode = 'range', course = null, hole = null;
+let anim = null;          // { res, t0, shot, carryShown, endShown, endedAt }
+const markers = [];       // landing markers { x, z, color }
+function clearSceneShots() {
+  markers.length = 0; anim = null;
+  $('#result').classList.remove('show');
+}
+function selectHole(number) {
+  const raw = course?.holes.find((item) => item.number === number);
+  hole = raw ? CourseGeometry.holeWorld(raw, course.elevation) : null;
+  if (hole?.elevationSource) hole.terrain = buildTerrain(hole);
+  $('#holeInfo').textContent = hole ? `Par ${hole.par} · ${hole.distance} yd` : '';
+  $('#courseNote').textContent = hole?.elevationSource
+    ? `USGS terrain · green ${hole.greenRise >= 0 ? '+' : ''}${fmt(hole.greenRise * 3.28084, 1)} ft from tee · fairway width estimated`
+    : hole ? 'No elevation imported · fairway and trees estimated from centerline.' : 'No hole selected';
+  $('#profile').hidden = sceneMode !== 'course' || !hole?.elevationSource;
+  if (hole?.elevationSource) drawElevationProfile(hole);
+  clearSceneShots();
+  try { localStorage.setItem('teebox.hole', String(number)); } catch (e) { /* storage unavailable */ }
+}
+async function selectCourse(handle) {
+  try {
+    const response = await fetch(`/courses/${encodeURIComponent(handle)}.json`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    course = await response.json();
+    $('#holeSelect').replaceChildren(...course.holes.map((item) => new Option(`Hole ${item.number}`, item.number)));
+    let saved = NaN;
+    try { saved = Number(localStorage.getItem('teebox.hole')); } catch (e) { /* storage unavailable */ }
+    if (!course.holes.some((item) => item.number === saved)) saved = course.holes[0].number;
+    $('#holeSelect').value = String(saved);
+    selectHole(saved);
+    try { localStorage.setItem('teebox.course', handle); } catch (e) { /* storage unavailable */ }
+  } catch (error) {
+    course = hole = null;
+    $('#holeInfo').textContent = '';
+    $('#profile').hidden = true;
+    $('#courseNote').textContent = `Course unavailable: ${error.message}`;
+  }
+}
+$('#sceneMode').onchange = (event) => {
+  sceneMode = event.target.value;
+  $('#rangeControls').hidden = sceneMode !== 'range';
+  $('#courseControls').hidden = sceneMode !== 'course';
+  $('#profile').hidden = sceneMode !== 'course' || !hole?.elevationSource;
+  clearSceneShots();
+  try { localStorage.setItem('teebox.sceneMode', sceneMode); } catch (e) { /* storage unavailable */ }
+};
+$('#courseSelect').onchange = (event) => selectCourse(event.target.value);
+$('#holeSelect').onchange = (event) => selectHole(Number(event.target.value));
+fetch('/courses/index.json').then((response) => {
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}).then((catalog) => {
+  $('#courseSelect').replaceChildren(...catalog.map((item) => new Option(item.name, item.handle)));
+  if (!catalog.length) { $('#courseNote').textContent = 'No courses imported'; return; }
+  let saved = null;
+  try { saved = localStorage.getItem('teebox.course'); } catch (e) { /* storage unavailable */ }
+  const handle = catalog.some((item) => item.handle === saved) ? saved : catalog[0].handle;
+  $('#courseSelect').value = handle;
+  return selectCourse(handle);
+}).catch((error) => { $('#courseNote').textContent = `Course catalog unavailable: ${error.message}`; });
+try {
+  if (localStorage.getItem('teebox.sceneMode') === 'course') {
+    $('#sceneMode').value = 'course';
+    $('#sceneMode').onchange({ target: $('#sceneMode') });
+  }
+} catch (e) { /* storage unavailable */ }
 // Fixed landscape detail keeps the scenery stable while the camera follows a shot.
 const noise = (n) => { const x = Math.sin(n * 127.1 + 78.23) * 43758.5453; return x - Math.floor(x); };
 const trees = [];
@@ -222,8 +303,9 @@ function drawMountains(hy) {
 }
 
 function drawTree(tree) {
-  const foot = project([tree.x, 0, tree.z]);
-  const top = project([tree.x, tree.h, tree.z]);
+  const base = tree.y || 0;
+  const foot = project([tree.x, base, tree.z]);
+  const top = project([tree.x, base + tree.h, tree.z]);
   if (!foot || !top) return;
   const h = foot.y - top.y, w = h * .38;
   if (h < 2 || foot.x < -w || foot.x > W + w) return;
@@ -252,6 +334,112 @@ function drawTree(tree) {
   ctx.lineTo(foot.x - w * .15, top.y + h * .67); ctx.closePath(); ctx.fill();
 }
 
+function groundEllipse(x, z, rx, rz, color, stroke) {
+  const points = Array.from({ length: 24 }, (_, i) => {
+    const angle = i * Math.PI / 12;
+    const px = x + Math.cos(angle) * rx, pz = z + Math.sin(angle) * rz;
+    return [px, (hole?.heightAt(px, pz) || 0) + .07, pz];
+  });
+  fillPoly(points, color, stroke);
+}
+function buildTerrain(currentHole) {
+  const cells = [];
+  const height = currentHole.heightAt;
+  const far = Math.ceil((currentHole.green.z + 60) / 10) * 10;
+  for (let z = far; z >= -10; z -= 10) {
+    for (let x = -90; x < 90; x += 10) {
+      const y = height(x + 5, z + 5);
+      const eastSlope = (height(x + 10, z + 5) - height(x, z + 5)) / 10;
+      const northSlope = (height(x + 5, z + 10) - height(x + 5, z)) / 10;
+      const light = Math.max(26, Math.min(39, 32 - eastSlope * 40 + northSlope * 25 + Math.sin(y * 2.2) * 1.2));
+      cells.push({ points: [
+        [x, height(x, z), z], [x + 10, height(x + 10, z), z],
+        [x + 10, height(x + 10, z + 10), z + 10], [x, height(x, z + 10), z + 10]
+      ], color: `hsl(115 34% ${light.toFixed(1)}%)` });
+    }
+  }
+  return cells;
+}
+function drawElevationProfile(currentHole) {
+  const canvas = $('#profilec'), g = canvas.getContext('2d');
+  const line = currentHole.centerline, samples = [];
+  let distance = 0;
+  for (let i = 0; i < line.length - 1; i++) {
+    const a = line[i], b = line[i + 1];
+    const length = Math.hypot(b.x - a.x, b.z - a.z);
+    const steps = Math.max(1, Math.ceil(length / 5));
+    for (let j = 0; j < steps; j++) {
+      const t = j / steps;
+      samples.push([distance + t * length, currentHole.heightAt(lerp(a.x, b.x, t), lerp(a.z, b.z, t))]);
+    }
+    distance += length;
+  }
+  samples.push([distance, currentHole.heightAt(line[line.length - 1].x, line[line.length - 1].z)]);
+  const heights = samples.map((sample) => sample[1]);
+  const low = Math.floor(Math.min(...heights) - 1), high = Math.ceil(Math.max(...heights) + 1);
+  const X = (d) => 27 + d / distance * 173;
+  const Y = (h) => 78 - (h - low) / (high - low) * 62;
+  g.clearRect(0, 0, canvas.width, canvas.height);
+  g.strokeStyle = 'rgba(255,255,255,.15)'; g.lineWidth = 1;
+  for (let h = Math.ceil(low); h <= high; h++) {
+    g.beginPath(); g.moveTo(27, Y(h)); g.lineTo(200, Y(h)); g.stroke();
+  }
+  g.beginPath();
+  samples.forEach(([d, h], i) => i ? g.lineTo(X(d), Y(h)) : g.moveTo(X(d), Y(h)));
+  g.strokeStyle = '#a7ec94'; g.lineWidth = 2; g.stroke();
+  g.fillStyle = '#b6cbb7'; g.font = '11px Segoe UI, sans-serif';
+  g.fillText(`${high >= 0 ? '+' : ''}${Math.round(high * 3.28084)}ft`, 0, 14);
+  g.fillText(`${low >= 0 ? '+' : ''}${Math.round(low * 3.28084)}ft`, 0, 84);
+  g.fillText('TEE', 27, 98); g.fillText('GREEN', 165, 98);
+}
+function drawCourseHole() {
+  if (!hole) return;
+  if (hole.terrain) {
+    ctx.lineWidth = 1;
+    for (const cell of hole.terrain) fillPoly(cell.points, cell.color, cell.color);
+  }
+  const line = hole.centerline;
+  // GeoJSON supplies centerline only. Widths and tree positions are visual estimates.
+  for (let i = line.length - 2; i >= 0; i--) {
+    const a = line[i], b = line[i + 1];
+    const dx = b.x - a.x, dz = b.z - a.z, length = Math.hypot(dx, dz) || 1;
+    const nx = dz / length, nz = -dx / length;
+    const widthA = i === 0 ? 14 : 21, widthB = i === line.length - 2 ? 17 : 21;
+    const drape = (points) => points.map(([x, y, z]) => [x, hole.heightAt(x, z) + y, z]);
+    const steps = Math.max(1, Math.ceil(length / 10));
+    for (let step = steps - 1; step >= 0; step--) {
+      const start = step / steps, end = (step + 1) / steps;
+      const strip = (wa, wb, y) => drape([
+        [lerp(a.x, b.x, start) - nx * lerp(wa, wb, start), y, lerp(a.z, b.z, start) - nz * lerp(wa, wb, start)],
+        [lerp(a.x, b.x, start) + nx * lerp(wa, wb, start), y, lerp(a.z, b.z, start) + nz * lerp(wa, wb, start)],
+        [lerp(a.x, b.x, end) + nx * lerp(wa, wb, end), y, lerp(a.z, b.z, end) + nz * lerp(wa, wb, end)],
+        [lerp(a.x, b.x, end) - nx * lerp(wa, wb, end), y, lerp(a.z, b.z, end) - nz * lerp(wa, wb, end)]
+      ]);
+      fillPoly(strip(widthA + 4, widthB + 4, .08), '#366a38');
+      fillPoly(strip(widthA, widthB, .1), i % 2 ? '#609a50' : '#579047');
+    }
+    for (const side of [-1, 1]) {
+      for (const t of [.24, .52, .81]) {
+        const offset = 35 + noise(i * 71 + t * 37 + side) * 15;
+        drawTree({
+          x: lerp(a.x, b.x, t) + side * nx * offset,
+          z: lerp(a.z, b.z, t) + side * nz * offset,
+          y: hole.heightAt(lerp(a.x, b.x, t) + side * nx * offset, lerp(a.z, b.z, t) + side * nz * offset),
+          h: 8 + noise(i * 19 + t * 23 + side) * 8,
+          shade: noise(i * 29 + t * 31 + side)
+        });
+      }
+    }
+  }
+  for (const feature of hole.features) {
+    if (feature.type.includes('bunker')) groundEllipse(feature.x, feature.z, 7, 11, '#d8c9a0', '#a8956b');
+  }
+  groundEllipse(hole.green.x, hole.green.z, 11, 15, '#82b96a', '#b6d799');
+  drawFlag(hole.green.x, hole.green.z, hole.heightAt(hole.green.x, hole.green.z));
+  fillPoly([[-2, hole.heightAt(-2, -2) + .12, -2], [2, hole.heightAt(2, -2) + .12, -2],
+    [2, hole.heightAt(2, 2) + .12, 2], [-2, hole.heightAt(-2, 2) + .12, 2]], '#457b42', '#a7c891');
+}
+
 function drawScene(now) {
   // horizon
   const fh = norm([B.f[0], 0, B.f[2]]);
@@ -267,6 +455,11 @@ function drawScene(now) {
   const rough = ctx.createLinearGradient(0, hy, 0, H);
   rough.addColorStop(0, '#648d62'); rough.addColorStop(1, '#315e32');
   ctx.fillStyle = rough; ctx.fillRect(0, hy, W, H - hy);
+
+  if (sceneMode === 'course') {
+    drawCourseHole();
+    return;
+  }
 
   // Raised shoulders frame the flat hitting area and break up the broad rough.
   for (const side of [-1, 1]) {
@@ -310,16 +503,14 @@ function drawScene(now) {
   fillPoly([[-1.1, 0, -1], [1.1, 0, -1], [1.1, 0, 1], [-1.1, 0, 1]], '#1c5a2b', '#0e2e16');
   fillPoly([[-1.1, 0, -1.25], [1.1, 0, -1.25], [1.1, 0, -1], [-1.1, 0, -1]], '#22262a');
 }
-function drawFlag(x, z) {
-  const b = project([x, 0, z]), t = project([x, 6, z]); if (!b || !t) return;
+function drawFlag(x, z, y = 0) {
+  const b = project([x, y, z]), t = project([x, y + 6, z]); if (!b || !t) return;
   const lw = Math.max(1, focal * 0.05 / b.z);
   ctx.strokeStyle = '#f2f2f2'; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(t.x, t.y); ctx.stroke();
   const fh = (b.y - t.y) * 0.28;
   ctx.fillStyle = '#e63946'; ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(t.x + fh*1.5, t.y + fh*0.5); ctx.lineTo(t.x, t.y + fh); ctx.fill();
 }
 // ---------- shot animation ----------
-let anim = null;          // { res, t0, shot, carryShown, endShown, endedAt }
-const markers = [];       // landing markers { x, z, color }
 let playSpeed = 1;
 function ballAt(res, t) {
   const pts = res.path;
@@ -329,10 +520,14 @@ function ballAt(res, t) {
   const a = pts[i], b = pts[i + 1], k = (t - a[0]) / ((b[0] - a[0]) || 1);
   return [lerp(a[1], b[1], k), lerp(a[2], b[2], k), lerp(a[3], b[3], k)];
 }
+// Visual-only height offset. Physics still computes flight, landing and roll on flat ground.
+function shotViewPoint(x, y, z) {
+  return [x, y + (sceneMode === 'course' && hole ? hole.heightAt(x, z) : 0), z];
+}
 function drawShot(now) {
   // markers from earlier shots
   markers.forEach((m, i) => {
-    const p = project([m.x, 0.05, m.z]); if (!p) return;
+    const p = project(shotViewPoint(m.x, 0.05, m.z)); if (!p) return;
     const r = Math.max(2, focal * 0.9 / p.z);
     ctx.fillStyle = m.last ? '#ffd23f' : 'rgba(255,255,255,.55)'; ctx.strokeStyle = 'rgba(0,0,0,.4)';
     ctx.beginPath(); ctx.ellipse(p.x, p.y, r * 1.6, r * 0.7, 0, 0, 6.2832); ctx.fill(); ctx.stroke();
@@ -343,15 +538,15 @@ function drawShot(now) {
   // trail
   const pts = anim.res.path; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   const trail = [];
-  for (let i = 0; i < pts.length && pts[i][0] <= t; i++) { const p = project([pts[i][1], pts[i][2], pts[i][3]]); if (p) trail.push(p); }
-  trail.push(project(pos));
+  for (let i = 0; i < pts.length && pts[i][0] <= t; i++) { const p = project(shotViewPoint(pts[i][1], pts[i][2], pts[i][3])); if (p) trail.push(p); }
+  trail.push(project(shotViewPoint(...pos)));
   const stroke = (w, c) => { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); let st = false;
     trail.forEach((p) => { if (!p) return; if (!st) { ctx.moveTo(p.x, p.y); st = true; } else ctx.lineTo(p.x, p.y); }); ctx.stroke(); };
   stroke(5, 'rgba(255,255,255,.18)'); stroke(1.8, 'rgba(255,255,255,.9)');
   // shadow + ball
-  const sp = project([pos[0], 0, pos[2]]);
+  const sp = project(shotViewPoint(pos[0], 0, pos[2]));
   if (sp) { const r = Math.max(2, focal * 0.021 / sp.z * 1.2); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, r * 1.3, r * 0.5, 0, 0, 6.2832); ctx.fill(); }
-  const bp = project(pos);
+  const bp = project(shotViewPoint(...pos));
   if (bp) {
     const r = Math.max(3.2, focal * 0.0214 / bp.z);
     if (r < 7) { ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.beginPath(); ctx.arc(bp.x, bp.y, r * 2.6, 0, 6.2832); ctx.fill(); }
@@ -360,7 +555,7 @@ function drawShot(now) {
   }
   // carry marker label in 3D
   if (anim.carryShown) {
-    const c = anim.res; const p = project([c.carryX * YD, 0.3, c.carryZ * YD]);
+    const c = anim.res; const p = project(shotViewPoint(c.carryX * YD, 0.3, c.carryZ * YD));
     if (p) { const pulse = 1 + 0.15 * Math.sin(now / 160);
       ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, Math.max(5, focal*2.2/p.z)*pulse, Math.max(2, focal*0.9/p.z)*pulse, 0, 0, 6.2832); ctx.stroke(); }
   }

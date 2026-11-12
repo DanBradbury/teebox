@@ -101,7 +101,7 @@ tcp.on('error', (e) => {
 tcp.listen(OC_PORT, HOST, () => console.log(`Listening for launch monitor (GSPro Open Connect) on TCP ${OC_PORT}`));
 
 // ---- HTTP: static files + SSE + test endpoint ----
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 const web = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
   if (url === '/events') {

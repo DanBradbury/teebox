@@ -81,5 +81,8 @@ test('serves the UI and refuses path traversal', async () => {
   const get = (p) => new Promise((res) => http.get({ port: WEB, host: '127.0.0.1', path: p }, (r) => { r.resume(); res(r.statusCode); }));
   assert.equal(await get('/'), 200);
   assert.equal(await get('/physics.js'), 200);
+  assert.equal(await get('/course.js'), 200);
+  assert.equal(await get('/courses/index.json'), 200);
+  assert.equal(await get('/courses/ancilhoffmangc.json'), 200);
   assert.equal(await get('/../server.js'), 404);
 });
