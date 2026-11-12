@@ -75,9 +75,11 @@ curl -X POST http://localhost:3000/api/shot -d "{\"BallData\":{\"Speed\":120,\"V
 
 ## How it works
 
-```
-Launch monitor ──USB──> vendor app + connector ──TCP :921 (JSON)──> server.js ──SSE──> browser
-                                                                                      (physics + drawing)
+```mermaid
+flowchart LR
+    LM[Launch monitor] -- USB --> VA[Vendor app + connector]
+    VA -- "TCP :921 (JSON)" --> S[server.js]
+    S -- SSE --> B["Browser<br/>(physics + drawing)"]
 ```
 
 - `server.js` listens for Open Connect JSON, replies `{"Code":200,...}`, and pushes each shot to the page over Server-Sent Events.
