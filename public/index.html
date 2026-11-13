@@ -17,9 +17,10 @@
   .badge { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--dim); }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: #c0453f; box-shadow: 0 0 8px currentColor; }
   .dot.wait { background: #e0b341; } .dot.ok { background: #46d06a; }
-  select, button, #targetDistance { font: inherit; font-size: 14px; color: var(--fg); background: rgba(255,255,255,.08);
+  select, button, #targetDistance, .putt { font: inherit; font-size: 14px; color: var(--fg); background: rgba(255,255,255,.08);
     border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; cursor: pointer; }
   #targetDistance { width: 72px; user-select: text; }
+  .putt { width: 54px; user-select: text; }
   button:hover, select:hover { background: rgba(255,255,255,.16); }
   button.primary { background: #2f8f48; border-color: #3fbf63; font-weight: 600; }
   button.primary:hover { background: #38a655; }
@@ -81,6 +82,14 @@
     <div class="row"><label class="badge" for="courseSelect">Course</label><select id="courseSelect"></select></div>
     <div class="row"><label class="badge" for="holeSelect">Hole</label><select id="holeSelect"></select><span class="badge" id="holeInfo"></span></div>
     <div class="row"><label class="badge" for="teeSelect">Tees</label><select id="teeSelect"></select></div>
+    <div class="row">
+      <label class="badge" for="onePuttFt">1 putt inside</label>
+      <input class="putt" id="onePuttFt" type="number" min="0" max="150" step="1" aria-label="One-putt distance in feet">
+      <label class="badge" for="twoPuttFt">ft · 2 inside</label>
+      <input class="putt" id="twoPuttFt" type="number" min="1" max="150" step="1" aria-label="Two-putt distance in feet">
+      <span class="badge">ft</span>
+    </div>
+    <div class="hint" id="roundInfo"></div>
     <div class="hint" id="courseNote">Loading course data…</div>
   </div>
   <div class="row">
@@ -192,8 +201,27 @@ let anim = null;          // { res, t0, shot, carryShown, endShown, endedAt }
 const markers = [];       // landing markers { x, z, color }
 // On a course hole the next shot is played from where the last one stopped, aimed at the flag.
 let lie = null;           // { x, z } resting ball in hole metres; null = on the tee
-let onGreen = false;      // last shot reached the green, so play restarts from the tee
-const GREEN_RADIUS = 12;
+let strokes = 0;          // full shots hit on the hole in play
+let round = { holes: 0, strokes: 0, par: 0 };
+// Putts are conceded by distance from the flag: one inside putts.one feet, two inside putts.two, never three.
+// A ball farther out than putts.two is not on the green yet.
+const PUTT_FIELDS = { one: '#onePuttFt', two: '#twoPuttFt' }, FOOT = .3048;
+let putts = { one: 10, two: 40 };
+try {
+  const saved = JSON.parse(localStorage.getItem('teebox.putts') || '{}');
+  for (const k of Object.keys(putts)) if (Number.isFinite(saved[k]) && saved[k] >= 0 && saved[k] <= 150) putts[k] = saved[k];
+} catch (e) { /* storage unavailable */ }
+for (const [k, sel] of Object.entries(PUTT_FIELDS)) {
+  $(sel).onchange = (e) => {
+    const value = Number(e.target.value);
+    if (Number.isFinite(value) && e.target.value !== '') putts[k] = Math.round(Math.max(0, Math.min(150, value)));
+    // Two-putt range is the edge of the green, so it can never sit inside one-putt range.
+    if (k === 'one') putts.two = Math.max(putts.two, putts.one, 1); else putts.one = Math.min(putts.one, putts.two = Math.max(putts.two, 1));
+    for (const [key, field] of Object.entries(PUTT_FIELDS)) $(field).value = putts[key];
+    try { localStorage.setItem('teebox.putts', JSON.stringify(putts)); } catch (err) { /* storage unavailable */ }
+  };
+  $(sel).value = putts[k];
+}
 // Origin and aim (unit vector) of the next shot. Shot-local x is right of aim, z along it.
 function shotFrame() {
   if (sceneMode !== 'course' || !hole || !lie) return { x: 0, z: 0, fx: 0, fz: 1 };
@@ -205,18 +233,41 @@ const frameLocal = (fr, [x, y, z]) => [(x - fr.x) * fr.fz - (z - fr.z) * fr.fx, 
 function showHoleInfo() {
   const toPin = lie && Math.hypot(hole.green.x - lie.x, hole.green.z - lie.z) / YD;
   $('#holeInfo').textContent = !hole ? '' : `Par ${hole.par} · ${hole.distance} yd` +
-    (lie ? ` · ${fmt(toPin)} yd to pin` : onGreen ? ' · on the green, back to the tee' : '');
+    (lie ? ` · ${fmt(toPin)} yd to pin · lying ${strokes}` : '');
+}
+const toPar = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : 'E');
+function showRound(lastHole = '') {
+  $('#roundInfo').textContent = round.holes
+    ? `Round ${toPar(round.strokes - round.par)} thru ${round.holes} (${round.strokes} strokes)${lastHole}` : '';
+}
+function resetRound() { round = { holes: 0, strokes: 0, par: 0 }; showRound(); }
+// Ball is on the green: concede the putts, score the hole and move to the next tee.
+function holeOut(feet) {
+  const done = hole, shots = strokes, onePutt = feet <= putts.one, score = shots + (onePutt ? 1 : 2);
+  round.holes++; round.strokes += score; round.par += done.par;
+  const next = course.holes[(course.holes.findIndex((item) => item.number === done.number) + 1) % course.holes.length];
+  $('#holeSelect').value = String(next.number);
+  selectHole(next.number);
+  const detail = `${shots} shot${shots === 1 ? '' : 's'} + ${onePutt ? '1 putt' : '2 putts'} from ${fmt(feet)} ft`;
+  const name = { '-3': 'albatross', '-2': 'eagle', '-1': 'birdie', 0: 'par', 1: 'bogey', 2: 'double bogey' }[score - done.par] ||
+    `${toPar(score - done.par)}`;
+  showRound(` · hole ${done.number}: ${score}, ${detail}`);
+  $('#resBig').innerHTML = `${score} <small>${name}</small>`;
+  $('#resSub').textContent = `Hole ${done.number} · ${detail}`;
+  $('#result').classList.add('show');
+  clearTimeout(showResult.h); showResult.h = setTimeout(() => $('#result').classList.remove('show'), 6500);
 }
 // Move play to the resting place of the shot being shown.
 function settleShot() {
   if (!anim || sceneMode !== 'course' || !hole) return;
   const rest = anim.res.path[anim.res.path.length - 1];
-  onGreen = Math.hypot(hole.green.x - rest[1], hole.green.z - rest[3]) <= GREEN_RADIUS;
-  lie = onGreen ? null : { x: rest[1], z: rest[3] };
+  const feet = Math.hypot(hole.green.x - rest[1], hole.green.z - rest[3]) / FOOT;
+  if (feet <= putts.two) { holeOut(feet); return; }
+  lie = { x: rest[1], z: rest[3] };
   showHoleInfo();
 }
 function clearSceneShots() {
-  markers.length = 0; anim = null; lie = null; onGreen = false;
+  markers.length = 0; anim = null; lie = null; strokes = 0;
   showHoleInfo();
   $('#result').classList.remove('show');
 }
@@ -243,6 +294,7 @@ async function selectCourse(handle) {
     const response = await fetch(`/courses/${encodeURIComponent(handle)}.json`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     course = await response.json();
+    resetRound();
     if (course.horizon) course.horizon.scale = horizonScale(course.horizon);
     $('#holeSelect').replaceChildren(...course.holes.map((item) => new Option(`Hole ${item.number}`, item.number)));
     const tees = course.tees || [];
@@ -747,6 +799,7 @@ function drawMini() {
 function handleShot(s) {
   if (!s.club) s.club = $('#club').value;
   settleShot();   // a shot hit before the last one finished showing still plays from where that one stopped
+  if (sceneMode === 'course' && hole) strokes++;
   const fr = shotFrame(), ground = terrainHeight();
   // Physics works in the shot's frame (ball at origin, aim along +z); terrain and wind are turned to match.
   const heightAt = ground && ((x, z) => { const w = frameWorld(fr, [x, 0, z]); return ground(w[0], w[2]); });
@@ -791,7 +844,7 @@ $('#speed').onchange = (e) => (playSpeed = parseFloat(e.target.value));
 const simulate = () => { const s = P.randomShot($('#club').value); s.source = 'sim'; handleShot(s); };
 $('#simBtn').onclick = simulate;
 addEventListener('keydown', (e) => { if (e.code === 'Space' && !/SELECT|BUTTON|INPUT|SUMMARY/.test(document.activeElement.tagName)) { e.preventDefault(); simulate(); } });
-$('#clearBtn').onclick = () => { history.length = 0; clearSceneShots(); renderHistory(); drawMini(); $('#dataGrid').innerHTML = ''; $('#result').classList.remove('show'); };
+$('#clearBtn').onclick = () => { history.length = 0; clearSceneShots(); resetRound(); renderHistory(); drawMini(); $('#dataGrid').innerHTML = ''; $('#result').classList.remove('show'); };
 $('#csvBtn').onclick = () => {
   const head = 'shot,club,source,ball_mph,vla,hla,backspin,sidespin,carry_yd,total_yd,offline_yd,apex_ft\n';
   const csv = head + history.map((h) => [h.n, h.club, h.src, h.speed, h.vla, h.hla, h.backspin, h.sidespin, h.carry, h.total, h.off, h.apexFt].map((v) => typeof v === 'number' ? +v.toFixed(2) : v).join(',')).join('\n');
