@@ -39,7 +39,7 @@ Set **Pin distance** in the top-left panel to move the target green. Your choice
 
 ## Course holes
 
-Choose **Course hole** under **Scene**, then select a course and hole. Ancil Hoffman GC's 18 holes are included with an offline USGS 3DEP height grid. Teebox rotates each hole's mapped tee-to-green line into the shot direction, draws ground elevations, and places mapped green and bunker points in the scene. Fairway width, green size, and tree positions remain visual estimates because the BlueGolf exports lack terrain outlines. Shots still use Teebox's existing flat-ground physics; their displayed paths are lifted over terrain for this visual pass, but elevation does not change carry, landing, or roll calculations.
+Choose **Course hole** under **Scene**, then select a course and hole. Ancil Hoffman GC's 18 holes are included with an offline USGS 3DEP height grid. Teebox rotates each hole's mapped tee-to-green line into the shot direction, draws ground elevations, and places mapped green and bunker points in the scene. Fairway width, green size, and tree positions remain visual estimates because the BlueGolf exports lack terrain outlines. Shots are played over that terrain: the ball lands where its flight meets the ground, bounces off the slope it hits, and rolls with gravity until the turf holds it, so uphill shots come up short and sidehill lies feed the ball away. The driving range stays flat.
 
 To add another course from Golfeo's BlueGolf exports:
 
