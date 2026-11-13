@@ -271,10 +271,22 @@ function clearSceneShots() {
   showHoleInfo();
   $('#result').classList.remove('show');
 }
+// Every tee's box on a hole, as features. Tees sharing a yardage share a box, marked for the tee in play or else the longest.
+function teeBoxes(raw, index, inPlay) {
+  const boxes = new Map();
+  for (const tee of course.tees?.length ? course.tees : [{ color: 'white', distances: [] }]) {
+    const cut = Math.max(0, raw.distance - (tee.distances[index] ?? raw.distance));
+    if (boxes.has(cut) && tee.name !== inPlay) continue;
+    boxes.set(cut, { type: 'tee', color: tee.color, coord: CourseGeometry.teeLine(raw.line, cut * YD)[0] });
+  }
+  return [...boxes.values()];
+}
 function selectHole(number) {
   let raw = course?.holes.find((item) => item.number === number);
   // Only the back tee is mapped; shorter tees start further down the centerline by the yardage difference.
-  const teeYd = course?.tees?.find((item) => item.name === $('#teeSelect').value)?.distances[course.holes.indexOf(raw)];
+  const index = course?.holes.indexOf(raw), inPlay = $('#teeSelect').value;
+  const teeYd = course?.tees?.find((item) => item.name === inPlay)?.distances[index];
+  if (raw) raw = { ...raw, features: [...raw.features, ...teeBoxes(raw, index, inPlay)] };
   if (raw && teeYd < raw.distance) {
     raw = { ...raw, distance: teeYd, line: CourseGeometry.teeLine(raw.line, (raw.distance - teeYd) * YD) };
   }
@@ -575,8 +587,36 @@ function drawCourseHole() {
   }
   groundEllipse(hole.green.x, hole.green.z, 11, 15, '#82b96a', '#b6d799');
   drawFlag(hole.green.x, hole.green.z, hole.heightAt(hole.green.x, hole.green.z));
-  fillPoly([[-2, hole.heightAt(-2, -2) + .12, -2], [2, hole.heightAt(2, -2) + .12, -2],
-    [2, hole.heightAt(2, 2) + .12, 2], [-2, hole.heightAt(-2, 2) + .12, 2]], '#457b42', '#a7c891');
+  // Far boxes first. The tee in play is the one at the origin.
+  hole.features.filter((feature) => feature.type === 'tee').sort((a, b) => b.z - a.z).forEach(drawTeeBox);
+  if (!lie && !anim) drawBall(project([0, hole.heightAt(0, 0) + .12 + .0214, 0]));
+}
+const TEE_COLORS = { gold: '#c9a227', blue: '#2456a6', white: '#ffffff', black: '#1b1b1b', green: '#2f7d4a',
+  red: '#b3261e', silver: '#a9afb5', purple: '#6b3fa0', yellow: '#e2c21f' };
+// A 4 m square of mown turf with a ball marker either side of its centre. Combination tees ("blue-white") get one of each colour.
+function drawTeeBox(box) {
+  const at = (x, z) => [box.x + x, hole.heightAt(box.x + x, box.z + z) + .12, box.z + z];
+  fillPoly([at(-2, -2), at(2, -2), at(2, 2), at(-2, 2)], '#457b42', '#a7c891');
+  const [left, right = left] = box.color.split('-').map((part) => TEE_COLORS[part] || '#888');
+  drawTeeMarker(at(-1.5, 0), left); drawTeeMarker(at(1.5, 0), right);
+}
+function drawTeeMarker([x, y, z], color) {
+  const size = .1, p = project([x, y + size, z]); if (!p) return;
+  const r = Math.max(1.5, focal * size / p.z);
+  ctx.fillStyle = 'rgba(0,0,0,.3)';
+  ctx.beginPath(); ctx.ellipse(p.x + r * .3, p.y + r, r * 1.2, r * .4, 0, 0, 6.2832); ctx.fill();
+  const shade = ctx.createRadialGradient(p.x - r * .35, p.y - r * .4, r * .1, p.x, p.y, r);
+  shade.addColorStop(0, 'rgba(255,255,255,.7)'); shade.addColorStop(.4, 'rgba(255,255,255,0)'); shade.addColorStop(1, 'rgba(0,0,0,.3)');
+  ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.2832);
+  ctx.fillStyle = color; ctx.fill(); ctx.fillStyle = shade; ctx.fill(); ctx.stroke();
+}
+function drawBall(bp) {
+  if (!bp) return;
+  const r = Math.max(3.2, focal * 0.0214 / bp.z);
+  if (r < 7) { ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.beginPath(); ctx.arc(bp.x, bp.y, r * 2.6, 0, 6.2832); ctx.fill(); }
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(bp.x, bp.y, r, 0, 6.2832); ctx.fill(); ctx.stroke();
 }
 
 function drawScene(now) {
@@ -688,13 +728,7 @@ function drawShot(now) {
   // shadow + ball
   const sp = project(groundPoint(pos[0], 0, pos[2]));
   if (sp) { const r = Math.max(2, focal * 0.021 / sp.z * 1.2); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, r * 1.3, r * 0.5, 0, 0, 6.2832); ctx.fill(); }
-  const bp = project(pos);
-  if (bp) {
-    const r = Math.max(3.2, focal * 0.0214 / bp.z);
-    if (r < 7) { ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.beginPath(); ctx.arc(bp.x, bp.y, r * 2.6, 0, 6.2832); ctx.fill(); }
-    ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(bp.x, bp.y, r, 0, 6.2832); ctx.fill(); ctx.stroke();
-  }
+  drawBall(project(pos));
   // carry marker label in 3D
   if (anim.carryShown) {
     const [cx, , cz] = frameWorld(anim.frame, [anim.res.carryX * YD, 0, anim.res.carryZ * YD]);

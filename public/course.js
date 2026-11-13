@@ -28,7 +28,7 @@ const CourseGeometry = (() => {
       return { x: east * forward[1] - north * forward[0], z: east * forward[0] + north * forward[1] };
     };
     const centerline = line.map(point);
-    const features = hole.features.map((feature) => ({ ...point(feature.coord), type: feature.type }));
+    const features = hole.features.map((feature) => ({ ...feature, ...point(feature.coord) }));
     const green = features.find((feature) => feature.type === 'green') || centerline[centerline.length - 1];
     const teeHeight = sampleElevation(elevation, lon0, lat0);
     const heightAt = (x, z) => {
