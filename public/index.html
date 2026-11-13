@@ -185,15 +185,40 @@ $('#targetDistance').onchange = (e) => {
 let sceneMode = 'range', course = null, hole = null;
 let anim = null;          // { res, t0, shot, carryShown, endShown, endedAt }
 const markers = [];       // landing markers { x, z, color }
+// On a course hole the next shot is played from where the last one stopped, aimed at the flag.
+let lie = null;           // { x, z } resting ball in hole metres; null = on the tee
+let onGreen = false;      // last shot reached the green, so play restarts from the tee
+const GREEN_RADIUS = 12;
+// Origin and aim (unit vector) of the next shot. Shot-local x is right of aim, z along it.
+function shotFrame() {
+  if (sceneMode !== 'course' || !hole || !lie) return { x: 0, z: 0, fx: 0, fz: 1 };
+  const dx = hole.green.x - lie.x, dz = hole.green.z - lie.z, d = Math.hypot(dx, dz) || 1;
+  return { x: lie.x, z: lie.z, fx: dx / d, fz: dz / d };
+}
+const frameWorld = (fr, [x, y, z]) => [fr.x + x * fr.fz + z * fr.fx, y, fr.z - x * fr.fx + z * fr.fz];
+const frameLocal = (fr, [x, y, z]) => [(x - fr.x) * fr.fz - (z - fr.z) * fr.fx, y, (x - fr.x) * fr.fx + (z - fr.z) * fr.fz];
+function showHoleInfo() {
+  const toPin = lie && Math.hypot(hole.green.x - lie.x, hole.green.z - lie.z) / YD;
+  $('#holeInfo').textContent = !hole ? '' : `Par ${hole.par} · ${hole.distance} yd` +
+    (lie ? ` · ${fmt(toPin)} yd to pin` : onGreen ? ' · on the green, back to the tee' : '');
+}
+// Move play to the resting place of the shot being shown.
+function settleShot() {
+  if (!anim || sceneMode !== 'course' || !hole) return;
+  const rest = anim.res.path[anim.res.path.length - 1];
+  onGreen = Math.hypot(hole.green.x - rest[1], hole.green.z - rest[3]) <= GREEN_RADIUS;
+  lie = onGreen ? null : { x: rest[1], z: rest[3] };
+  showHoleInfo();
+}
 function clearSceneShots() {
-  markers.length = 0; anim = null;
+  markers.length = 0; anim = null; lie = null; onGreen = false;
+  showHoleInfo();
   $('#result').classList.remove('show');
 }
 function selectHole(number) {
   const raw = course?.holes.find((item) => item.number === number);
   hole = raw ? CourseGeometry.holeWorld(raw, course.elevation) : null;
   if (hole?.elevationSource) hole.terrain = buildTerrain(hole);
-  $('#holeInfo').textContent = hole ? `Par ${hole.par} · ${hole.distance} yd` : '';
   $('#courseNote').textContent = hole?.elevationSource
     ? `USGS terrain · green ${hole.greenRise >= 0 ? '+' : ''}${fmt(hole.greenRise * 3.28084, 1)} ft from tee · fairway width estimated${
       course.horizon ? ` · real skyline${course.horizon.scale > 1.05 ? ` ×${fmt(course.horizon.scale, 1)} height` : ''}` : ''}`
@@ -217,7 +242,7 @@ async function selectCourse(handle) {
     selectHole(saved);
     try { localStorage.setItem('teebox.course', handle); } catch (e) { /* storage unavailable */ }
   } catch (error) {
-    course = hole = null;
+    course = hole = lie = null;
     $('#holeInfo').textContent = '';
     $('#profile').hidden = true;
     $('#courseNote').textContent = `Course unavailable: ${error.message}`;
@@ -567,7 +592,7 @@ function drawShot(now) {
   // markers from earlier shots
   markers.forEach((m, i) => {
     const p = project(groundPoint(m.x, 0.05, m.z)); if (!p) return;
-    const r = Math.max(2, focal * 0.9 / p.z);
+    const r = Math.min(7, Math.max(2, focal * 0.9 / p.z));   // capped: the camera now stands over the last one
     ctx.fillStyle = m.last ? '#ffd23f' : 'rgba(255,255,255,.55)'; ctx.strokeStyle = 'rgba(0,0,0,.4)';
     ctx.beginPath(); ctx.ellipse(p.x, p.y, r * 1.6, r * 0.7, 0, 0, 6.2832); ctx.fill(); ctx.stroke();
   });
@@ -594,19 +619,26 @@ function drawShot(now) {
   }
   // carry marker label in 3D
   if (anim.carryShown) {
-    const c = anim.res; const p = project(groundPoint(c.carryX * YD, 0.3, c.carryZ * YD));
+    const [cx, , cz] = frameWorld(anim.frame, [anim.res.carryX * YD, 0, anim.res.carryZ * YD]);
+    const p = project(groundPoint(cx, 0.3, cz));
     if (p) { const pulse = 1 + 0.15 * Math.sin(now / 160);
       ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, Math.max(5, focal*2.2/p.z)*pulse, Math.max(2, focal*0.9/p.z)*pulse, 0, 0, 6.2832); ctx.stroke(); }
   }
 }
 
 function camUpdate(dt) {
+  // Camera sits behind the ball in the shot's own frame, so it faces the flag after each course shot.
+  const fr = anim ? anim.frame : shotFrame();
+  const heightAt = terrainHeight(), base = heightAt ? heightAt(fr.x, fr.z) : 0;
   let dpos = HOME.pos, dtgt = HOME.tgt;
   if (anim) {
-    const b = ballAt(anim.res, anim.t);
-    dpos = [b[0] * 0.8, 9 + Math.min(b[1] * 0.08, 3), Math.max(-9, b[2] - 30)];
-    dtgt = [b[0], b[1] * 0.65 + 0.5, b[2] + 5];
+    const b = frameLocal(fr, ballAt(anim.res, anim.t)), up = b[1] - base;
+    dpos = [b[0] * 0.8, 9 + Math.min(up * 0.08, 3), Math.max(-9, b[2] - 30)];
+    dtgt = [b[0], up * 0.65 + 0.5, b[2] + 5];
   }
+  dpos = frameWorld(fr, [dpos[0], dpos[1] + base, dpos[2]]);
+  dtgt = frameWorld(fr, [dtgt[0], dtgt[1] + base, dtgt[2]]);
+  if (heightAt) dpos[1] = Math.max(dpos[1], heightAt(dpos[0], dpos[2]) + 1.2);
   const k = 1 - Math.exp(-dt * (anim ? 4.5 : 1.4));
   for (let i = 0; i < 3; i++) { cam.pos[i] = lerp(cam.pos[i], dpos[i], k); cam.tgt[i] = lerp(cam.tgt[i], dtgt[i], k); }
 }
@@ -618,7 +650,7 @@ function frame(now) {
     anim.t = (now - anim.t0) / 1000 * playSpeed;
     if (!anim.carryShown && anim.t >= anim.res.hangTime) { anim.carryShown = true; showResult('carry', anim); }
     if (!anim.endShown && anim.t >= anim.res.duration) { anim.endShown = true; anim.endedAt = now; showResult('total', anim); }
-    if (anim.endShown && now - anim.endedAt > 3500) anim = null;
+    if (anim.endShown && now - anim.endedAt > 3500) { settleShot(); anim = null; }
   }
   camUpdate(dt); updateBasis();
   drawScene(now); drawShot(now);
@@ -637,7 +669,8 @@ function showResult(kind, a) {
     $('#resBig').innerHTML = `${fmt(r.totalYd)} <small>yd total</small>`;
     $('#resSub').textContent = `Carry ${fmt(r.carryYd)} · rolled ${fmt(r.totalYd - r.carryYd)} · ${side(r.totalX)}`;
     markers.forEach((m) => (m.last = false));
-    markers.push({ x: r.totalX * YD, z: r.totalZ * YD, last: true }); if (markers.length > 15) markers.shift();
+    const [x, , z] = frameWorld(a.frame, [r.totalX * YD, 0, r.totalZ * YD]);
+    markers.push({ x, z, last: true }); if (markers.length > 15) markers.shift();
     drawMini();
   }
   el.classList.add('show');
@@ -651,7 +684,7 @@ function setData(s, res) {
     ['Hang time', fmt(res.hangTime, 1) + ' s'], ['Land speed', fmt(res.landSpeed) + ' mph'],
     ['Land angle', fmt(res.landAngle, 1) + '°'], ['Land spin', fmt(res.landSpin) + ' rpm']];
   const rise = (ft) => (ft >= 0 ? '+' : '−') + fmt(Math.abs(ft), 1) + ' ft';
-  if (res.terrain) rows.push(['Lands vs tee', rise(res.carryRiseFt)], ['Rests vs tee', rise(res.totalRiseFt)]);
+  if (res.terrain) rows.push(['Lands vs ball', rise(res.carryRiseFt)], ['Rests vs ball', rise(res.totalRiseFt)]);
   $('#dataGrid').innerHTML = rows.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
 }
 
@@ -687,12 +720,17 @@ function drawMini() {
 // ---------- shot entry ----------
 function handleShot(s) {
   if (!s.club) s.club = $('#club').value;
-  const heightAt = terrainHeight();
-  const res = P.simulate(s, { ...conditions(), heightAt });
+  settleShot();   // a shot hit before the last one finished showing still plays from where that one stopped
+  const fr = shotFrame(), ground = terrainHeight();
+  // Physics works in the shot's frame (ball at origin, aim along +z); terrain and wind are turned to match.
+  const heightAt = ground && ((x, z) => { const w = frameWorld(fr, [x, 0, z]); return ground(w[0], w[2]); });
+  const windFrom = conditions().windFrom - Math.atan2(fr.fx, fr.fz) * 180 / Math.PI;
+  const res = P.simulate(s, { ...conditions(), windFrom, heightAt });
+  res.path = res.path.map(([t, ...p]) => [t, ...frameWorld(fr, p)]);
   res.shot = s; res.terrain = !!heightAt;
   setData(s, res);
   $('#result').classList.remove('show');
-  anim = { res, shot: s, t0: performance.now(), t: 0, carryShown: false, endShown: false };
+  anim = { res, frame: fr, shot: s, t0: performance.now(), t: 0, carryShown: false, endShown: false };
   addHistory(s, res);
   const h = history[history.length - 1]; h.totalX = res.totalX; h.total = res.totalYd;
   if (s.source === 'sim') { /* sim shots use the club dropdown */ }
@@ -727,7 +765,7 @@ $('#speed').onchange = (e) => (playSpeed = parseFloat(e.target.value));
 const simulate = () => { const s = P.randomShot($('#club').value); s.source = 'sim'; handleShot(s); };
 $('#simBtn').onclick = simulate;
 addEventListener('keydown', (e) => { if (e.code === 'Space' && !/SELECT|BUTTON|INPUT|SUMMARY/.test(document.activeElement.tagName)) { e.preventDefault(); simulate(); } });
-$('#clearBtn').onclick = () => { history.length = 0; markers.length = 0; anim = null; renderHistory(); drawMini(); $('#dataGrid').innerHTML = ''; $('#result').classList.remove('show'); };
+$('#clearBtn').onclick = () => { history.length = 0; clearSceneShots(); renderHistory(); drawMini(); $('#dataGrid').innerHTML = ''; $('#result').classList.remove('show'); };
 $('#csvBtn').onclick = () => {
   const head = 'shot,club,source,ball_mph,vla,hla,backspin,sidespin,carry_yd,total_yd,offline_yd,apex_ft\n';
   const csv = head + history.map((h) => [h.n, h.club, h.src, h.speed, h.vla, h.hla, h.backspin, h.sidespin, h.carry, h.total, h.off, h.apexFt].map((v) => typeof v === 'number' ? +v.toFixed(2) : v).join(',')).join('\n');
