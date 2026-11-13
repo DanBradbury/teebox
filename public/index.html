@@ -57,6 +57,8 @@
   #courseControls { display: flex; flex-direction: column; gap: 8px; }
   #courseControls[hidden], #rangeControls[hidden] { display: none; }
   #courseNote { max-width: 240px; }
+  a.badge { color: var(--accent); margin-left: auto; }
+  .row[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -70,7 +72,7 @@
     <select id="club"></select>
     <select id="speed" title="Playback speed"><option value="1">1×</option><option value="2">2×</option><option value="0.5">0.5×</option></select>
   </div>
-  <div class="row"><label class="badge" for="sceneMode">Scene</label><select id="sceneMode"><option value="range">Driving range</option><option value="course">Course hole</option></select></div>
+  <div class="row"><label class="badge" for="sceneMode">Scene</label><select id="sceneMode"><option value="range">Driving range</option><option value="course">Course hole</option></select><a class="badge" href="courses.html">Courses</a></div>
   <div class="row" id="rangeControls">
     <label class="badge" for="targetDistance">Pin distance</label>
     <input id="targetDistance" type="number" min="25" max="400" step="1" value="150" aria-label="Pin distance in yards">
@@ -79,6 +81,7 @@
   <div id="courseControls" hidden>
     <div class="row"><label class="badge" for="courseSelect">Course</label><select id="courseSelect"></select></div>
     <div class="row"><label class="badge" for="holeSelect">Hole</label><select id="holeSelect"></select><span class="badge" id="holeInfo"></span></div>
+    <div class="row"><label class="badge" for="teeSelect">Tees</label><select id="teeSelect"></select></div>
     <div class="row">
       <label class="badge" for="onePuttFt">1 putt inside</label>
       <input class="putt" id="onePuttFt" type="number" min="0" max="150" step="1" aria-label="One-putt distance in feet">
@@ -192,6 +195,8 @@ $('#targetDistance').onchange = (e) => {
   try { localStorage.setItem('teebox.targetYd', String(targetYd)); } catch (err) { /* storage unavailable */ }
 };
 let sceneMode = 'range', course = null, hole = null;
+// The course selector links here as /?course=HANDLE&tee=NAME&hole=N; those choices win over remembered ones.
+const linked = new URLSearchParams(location.search);
 let anim = null;          // { res, t0, shot, carryShown, endShown, endedAt }
 const markers = [];       // landing markers { x, z, color }
 // On a course hole the next shot is played from where the last one stopped, aimed at the flag.
@@ -267,7 +272,12 @@ function clearSceneShots() {
   $('#result').classList.remove('show');
 }
 function selectHole(number) {
-  const raw = course?.holes.find((item) => item.number === number);
+  let raw = course?.holes.find((item) => item.number === number);
+  // Only the back tee is mapped; shorter tees start further down the centerline by the yardage difference.
+  const teeYd = course?.tees?.find((item) => item.name === $('#teeSelect').value)?.distances[course.holes.indexOf(raw)];
+  if (raw && teeYd < raw.distance) {
+    raw = { ...raw, distance: teeYd, line: CourseGeometry.teeLine(raw.line, (raw.distance - teeYd) * YD) };
+  }
   hole = raw ? CourseGeometry.holeWorld(raw, course.elevation) : null;
   if (hole?.elevationSource) hole.terrain = buildTerrain(hole);
   $('#courseNote').textContent = hole?.elevationSource
@@ -287,8 +297,17 @@ async function selectCourse(handle) {
     resetRound();
     if (course.horizon) course.horizon.scale = horizonScale(course.horizon);
     $('#holeSelect').replaceChildren(...course.holes.map((item) => new Option(`Hole ${item.number}`, item.number)));
-    let saved = NaN;
-    try { saved = Number(localStorage.getItem('teebox.hole')); } catch (e) { /* storage unavailable */ }
+    const tees = course.tees || [];
+    $('#teeSelect').replaceChildren(...tees.map((item) => new Option(`${item.name} · ${item.yards} yd`, item.name)));
+    $('#teeSelect').parentElement.hidden = !tees.length;
+    let savedTee = linked.get('tee');
+    try { savedTee ??= localStorage.getItem('teebox.tee'); } catch (e) { /* storage unavailable */ }
+    if (tees.some((item) => item.name === savedTee)) $('#teeSelect').value = savedTee;
+    try { localStorage.setItem('teebox.tee', $('#teeSelect').value); } catch (e) { /* storage unavailable */ }
+    let saved = Number(linked.get('hole') ?? NaN);
+    try { if (!linked.has('hole')) saved = Number(localStorage.getItem('teebox.hole')); } catch (e) { /* storage unavailable */ }
+    linked.delete('hole'); linked.delete('tee');
+    if (location.search) window.history.replaceState(null, '', location.pathname);   // bare `history` is the session list
     if (!course.holes.some((item) => item.number === saved)) saved = course.holes[0].number;
     $('#holeSelect').value = String(saved);
     selectHole(saved);
@@ -310,24 +329,31 @@ $('#sceneMode').onchange = (event) => {
 };
 $('#courseSelect').onchange = (event) => selectCourse(event.target.value);
 $('#holeSelect').onchange = (event) => selectHole(Number(event.target.value));
+$('#teeSelect').onchange = (event) => {
+  try { localStorage.setItem('teebox.tee', event.target.value); } catch (e) { /* storage unavailable */ }
+  selectHole(Number($('#holeSelect').value));
+};
 fetch('/courses/index.json').then((response) => {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
-}).then((catalog) => {
+}).then((all) => {
+  const catalog = all.filter((item) => !item.comingSoon);
   $('#courseSelect').replaceChildren(...catalog.map((item) => new Option(item.name, item.handle)));
   if (!catalog.length) { $('#courseNote').textContent = 'No courses imported'; return; }
-  let saved = null;
-  try { saved = localStorage.getItem('teebox.course'); } catch (e) { /* storage unavailable */ }
+  let saved = linked.get('course');
+  try { saved ??= localStorage.getItem('teebox.course'); } catch (e) { /* storage unavailable */ }
   const handle = catalog.some((item) => item.handle === saved) ? saved : catalog[0].handle;
   $('#courseSelect').value = handle;
   return selectCourse(handle);
 }).catch((error) => { $('#courseNote').textContent = `Course catalog unavailable: ${error.message}`; });
-try {
-  if (localStorage.getItem('teebox.sceneMode') === 'course') {
+{
+  let savedMode = linked.has('course') ? 'course' : null;
+  try { savedMode ??= localStorage.getItem('teebox.sceneMode'); } catch (e) { /* storage unavailable */ }
+  if (savedMode === 'course') {
     $('#sceneMode').value = 'course';
     $('#sceneMode').onchange({ target: $('#sceneMode') });
   }
-} catch (e) { /* storage unavailable */ }
+}
 // Fixed landscape detail keeps the scenery stable while the camera follows a shot.
 const noise = (n) => { const x = Math.sin(n * 127.1 + 78.23) * 43758.5453; return x - Math.floor(x); };
 const trees = [];

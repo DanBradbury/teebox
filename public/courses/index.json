@@ -1,1 +1,37 @@
-[{"handle":"ancilhoffmangc","name":"Ancil Hoffman GC"}]
+[
+ {
+  "handle": "ancilhoffmangc",
+  "name": "Ancil Hoffman GC",
+  "location": "Carmichael, California",
+  "architect": "William F. Bell",
+  "holes": 18,
+  "par": 72,
+  "yards": 7026,
+  "rating": 73.3,
+  "slope": 132
+ },
+ {
+  "handle": "hagginoaksmackenzie",
+  "name": "Haggin Oaks · MacKenzie",
+  "location": "Sacramento, California",
+  "architect": "Alister MacKenzie",
+  "holes": 18,
+  "par": 72,
+  "yards": 7035,
+  "rating": 72.8,
+  "slope": 127,
+  "comingSoon": true
+ },
+ {
+  "handle": "mathergc",
+  "name": "Mather GC",
+  "location": "Mather, California",
+  "architect": "Jack Fleming",
+  "holes": 18,
+  "par": 72,
+  "yards": 6767,
+  "rating": 71.7,
+  "slope": 125,
+  "comingSoon": true
+ }
+]
