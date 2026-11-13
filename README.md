@@ -46,9 +46,10 @@ To add another course from Golfeo's BlueGolf exports:
 ```
 node scripts/import-course.js /path/to/course_full.json /path/to/course_holes.geojson
 node scripts/import-elevation.js COURSE_HANDLE
+node scripts/import-horizon.js COURSE_HANDLE
 ```
 
-First command writes a small course file under `public/courses/` and updates the local course catalog. Second downloads a roughly 4–5 metre sampled height grid from the public [USGS 3DEP elevation service](https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer) and embeds it in that course file. USGS source coverage varies; the command rejects incomplete coverage. Import requires an internet connection, but viewing imported terrain works offline. Re-importing a course replaces its file, so run elevation import again afterward. Reload Teebox to see new data.
+First command writes a small course file under `public/courses/` and updates the local course catalog. Second downloads a roughly 4–5 metre sampled height grid from the public [USGS 3DEP elevation service](https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer) and embeds it in that course file. USGS source coverage varies; the command rejects incomplete coverage. Import requires an internet connection, but viewing imported terrain works offline. Third bakes the real skyline around the course from the same service: for every half degree of compass it stores the highest terrain seen out to 150 km, so each hole shows the ridges that actually lie behind its green instead of the driving range's generic mountains. Gentle skylines are drawn up to 6× taller to stay readable (the course note shows the factor); the distant tree line is a visual estimate. Re-importing a course replaces its file, so run elevation and horizon imports again afterward. Reload Teebox to see new data.
 
 ## Connect your launch monitor
 

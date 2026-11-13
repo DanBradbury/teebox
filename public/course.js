@@ -38,10 +38,19 @@ const CourseGeometry = (() => {
       const elevationHere = sampleElevation(elevation, lon0 + east / metresEast, lat0 + north / 111320);
       return elevationHere === null ? 0 : elevationHere - teeHeight;
     };
-    return { ...hole, centerline, features, green, heightAt,
+    // Compass bearing of tee → green, degrees clockwise from north.
+    const bearing = Math.atan2(forward[0], forward[1]) * 180 / Math.PI;
+    return { ...hole, centerline, features, green, heightAt, bearing,
       elevationSource: elevation?.source || null, teeElevation: teeHeight,
       greenRise: heightAt(green.x, green.z) };
   }
-  return { holeWorld, sampleElevation };
+  // Baked skyline: elevation angle (degrees) of one distance band at a compass azimuth.
+  function horizonAngle(horizon, band, azimuth) {
+    const n = band.angles.length;
+    const at = (((azimuth % 360) + 360) % 360) / horizon.step;
+    const i = Math.floor(at) % n, t = at - Math.floor(at);
+    return band.angles[i] * (1 - t) + band.angles[(i + 1) % n] * t;
+  }
+  return { holeWorld, sampleElevation, horizonAngle };
 })();
 if (typeof module !== 'undefined') module.exports = CourseGeometry;

@@ -195,7 +195,8 @@ function selectHole(number) {
   if (hole?.elevationSource) hole.terrain = buildTerrain(hole);
   $('#holeInfo').textContent = hole ? `Par ${hole.par} · ${hole.distance} yd` : '';
   $('#courseNote').textContent = hole?.elevationSource
-    ? `USGS terrain · green ${hole.greenRise >= 0 ? '+' : ''}${fmt(hole.greenRise * 3.28084, 1)} ft from tee · fairway width estimated`
+    ? `USGS terrain · green ${hole.greenRise >= 0 ? '+' : ''}${fmt(hole.greenRise * 3.28084, 1)} ft from tee · fairway width estimated${
+      course.horizon ? ` · real skyline${course.horizon.scale > 1.05 ? ` ×${fmt(course.horizon.scale, 1)} height` : ''}` : ''}`
     : hole ? 'No elevation imported · fairway and trees estimated from centerline.' : 'No hole selected';
   $('#profile').hidden = sceneMode !== 'course' || !hole?.elevationSource;
   if (hole?.elevationSource) drawElevationProfile(hole);
@@ -207,6 +208,7 @@ async function selectCourse(handle) {
     const response = await fetch(`/courses/${encodeURIComponent(handle)}.json`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     course = await response.json();
+    if (course.horizon) course.horizon.scale = horizonScale(course.horizon);
     $('#holeSelect').replaceChildren(...course.holes.map((item) => new Option(`Hole ${item.number}`, item.number)));
     let saved = NaN;
     try { saved = Number(localStorage.getItem('teebox.hole')); } catch (e) { /* storage unavailable */ }
@@ -300,6 +302,40 @@ function drawMountains(hy) {
       }
     }
   });
+}
+
+// Real skyline baked by scripts/import-horizon.js, rotated to the hole's compass bearing.
+// Low relief is exaggerated (up to 6×) so distant ranges stay readable; steep terrain is drawn 1:1.
+function horizonScale(horizon) {
+  const peak = Math.max(...horizon.bands.flatMap((band) => band.angles));
+  return Math.max(1, Math.min(6, 5 / Math.max(peak, .01)));
+}
+function drawHorizon(hy) {
+  const horizon = course.horizon, DEG = 180 / Math.PI;
+  const heading = hole.bearing + Math.atan2(B.f[0], B.f[2]) * DEG;
+  const ridge = (angleAt) => {
+    ctx.beginPath(); ctx.moveTo(0, hy + 30);
+    for (let x = 0; x <= W + 6; x += 6) {
+      const a = Math.atan((x - W / 2) / focal);
+      ctx.lineTo(x, hy - focal * Math.tan(angleAt(heading + a * DEG) / DEG) / Math.cos(a));
+    }
+    ctx.lineTo(W, hy + 30); ctx.closePath();
+  };
+  const colors = [['#466d62', '#527e63'], ['#718d88', '#91aaa0'], ['#a4b8ba', '#c2d0c9']];
+  for (let b = horizon.bands.length - 1; b >= 0; b--) {
+    const band = horizon.bands[b], [base, foot] = colors[Math.min(b, colors.length - 1)];
+    const top = hy - focal * Math.tan(Math.max(...band.angles) * horizon.scale / DEG);
+    const grad = ctx.createLinearGradient(0, top, 0, hy + 25);
+    grad.addColorStop(0, base); grad.addColorStop(1, foot);
+    ridge((azimuth) => CourseGeometry.horizonAngle(horizon, band, azimuth) * horizon.scale);
+    ctx.fillStyle = grad; ctx.fill();
+  }
+  // Distant tree line is a visual estimate; it is keyed to azimuth so it stays put as the camera pans.
+  ridge((azimuth) => {
+    const at = azimuth * 3, i = Math.floor(at), t = at - i;
+    return .35 + lerp(noise(i), noise(i + 1), t) * .5;
+  });
+  ctx.fillStyle = '#3c6647'; ctx.fill();
 }
 
 function drawTree(tree) {
@@ -451,7 +487,7 @@ function drawScene(now) {
   const glow = ctx.createRadialGradient(W * .75, hy - H * .31, 8, W * .75, hy - H * .31, H * .45);
   glow.addColorStop(0, 'rgba(255,244,206,.30)'); glow.addColorStop(1, 'rgba(255,244,206,0)');
   ctx.fillStyle = glow; ctx.fillRect(0, 0, W, hy);
-  drawMountains(hy);
+  if (sceneMode === 'course' && hole && course?.horizon) drawHorizon(hy); else drawMountains(hy);
   const rough = ctx.createLinearGradient(0, hy, 0, H);
   rough.addColorStop(0, '#648d62'); rough.addColorStop(1, '#315e32');
   ctx.fillStyle = rough; ctx.fillRect(0, hy, W, H - hy);

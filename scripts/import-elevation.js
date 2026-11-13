@@ -42,6 +42,8 @@ function tiffGrid(buffer) {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const tile = Math.floor(y / tileH) * across + Math.floor(x / tileW);
+      // Sparse TIFFs leave tiles without data (open ocean) empty.
+      if (!lengths[tile]) { values.push(null); continue; }
       const byte = offsets[tile] + ((y % tileH) * tileW + x % tileW) * 4;
       if (byte + 4 > offsets[tile] + lengths[tile]) throw new Error('Truncated TIFF tile');
       const elevation = buffer.readFloatLE(byte);
@@ -67,18 +69,22 @@ function courseBounds(course, paddingMetres = 90) {
   return [west - lonPad, south - latPad, east + lonPad, north + latPad];
 }
 
+async function fetchTiff(bbox, width, height, fetchFn = fetch) {
+  const url = new URL(SERVICE);
+  url.search = new URLSearchParams({ bbox: bbox.join(','), bboxSR: '4326', imageSR: '4326',
+    size: `${width},${height}`, format: 'tiff', pixelType: 'F32', f: 'image' }).toString();
+  const response = await fetchFn(url, { signal: AbortSignal.timeout(90000) });
+  if (!response.ok) throw new Error(`USGS elevation request failed: HTTP ${response.status}`);
+  return tiffGrid(Buffer.from(await response.arrayBuffer()));
+}
+
 async function fetchGrid(course, fetchFn = fetch) {
   const bbox = courseBounds(course);
   const metresEast = 111320 * Math.cos((bbox[1] + bbox[3]) / 2 * Math.PI / 180);
   const width = Math.ceil((bbox[2] - bbox[0]) * metresEast / 4);
   const height = Math.ceil((bbox[3] - bbox[1]) * 111320 / 4);
   if (width > 1000 || height > 1000) throw new Error('Course bounds too large for one grid');
-  const url = new URL(SERVICE);
-  url.search = new URLSearchParams({ bbox: bbox.join(','), bboxSR: '4326', imageSR: '4326',
-    size: `${width},${height}`, format: 'tiff', pixelType: 'F32', f: 'image' }).toString();
-  const response = await fetchFn(url, { signal: AbortSignal.timeout(90000) });
-  if (!response.ok) throw new Error(`USGS elevation request failed: HTTP ${response.status}`);
-  const grid = tiffGrid(Buffer.from(await response.arrayBuffer()));
+  const grid = await fetchTiff(bbox, width, height, fetchFn);
   if (grid.values.filter(Number.isFinite).length < grid.values.length * .9) {
     throw new Error('Elevation coverage incomplete for this course');
   }
@@ -100,4 +106,4 @@ if (require.main === module) {
   }).catch((error) => { console.error(error.message); process.exitCode = 1; });
 }
 
-module.exports = { tiffGrid, courseBounds, fetchGrid };
+module.exports = { tiffGrid, courseBounds, fetchTiff, fetchGrid };
