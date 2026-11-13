@@ -44,6 +44,23 @@ const CourseGeometry = (() => {
       elevationSource: elevation?.source || null, teeElevation: teeHeight,
       greenRise: heightAt(green.x, green.z) };
   }
+  // Forward tees are not mapped, so stand in for one by starting `cut` metres down the mapped centerline.
+  function teeLine(line, cut) {
+    const metresEast = 111320 * Math.cos(line[0][1] * Math.PI / 180);
+    const span = (a, b) => Math.hypot((b[0] - a[0]) * metresEast, (b[1] - a[1]) * 111320);
+    const total = line.slice(1).reduce((sum, p, i) => sum + span(line[i], p), 0);
+    let left = Math.max(0, Math.min(cut, total - 20));
+    for (let i = 1; i < line.length; i++) {
+      const length = span(line[i - 1], line[i]);
+      if (left < length || i === line.length - 1) {
+        const t = left / length;
+        const start = [line[i - 1][0] + (line[i][0] - line[i - 1][0]) * t, line[i - 1][1] + (line[i][1] - line[i - 1][1]) * t];
+        return [start, ...line.slice(i)];
+      }
+      left -= length;
+    }
+    return line;
+  }
   // Baked skyline: elevation angle (degrees) of one distance band at a compass azimuth.
   function horizonAngle(horizon, band, azimuth) {
     const n = band.angles.length;
@@ -51,6 +68,6 @@ const CourseGeometry = (() => {
     const i = Math.floor(at) % n, t = at - Math.floor(at);
     return band.angles[i] * (1 - t) + band.angles[(i + 1) % n] * t;
   }
-  return { holeWorld, sampleElevation, horizonAngle };
+  return { holeWorld, sampleElevation, horizonAngle, teeLine };
 })();
 if (typeof module !== 'undefined') module.exports = CourseGeometry;

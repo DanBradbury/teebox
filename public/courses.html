@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Teebox · Courses</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg: #0b1610; --felt: #12241a; --line: rgba(255,255,255,.12); --fg: #eef3ea; --dim: #9db0a1;
+    --brass: #c9a55c; --paper: #f4eedd; --ink: #1c2a21; --rule: #b9ae93; --club: #173a28;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body { background: radial-gradient(120% 80% at 50% 0%, #1a3324 0%, var(--bg) 62%) fixed var(--bg); color: var(--fg);
+    font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  [hidden] { display: none !important; }
+  .bar { display: flex; align-items: center; justify-content: space-between; padding: 22px clamp(18px, 4vw, 48px); }
+  .mark { font-family: var(--serif); font-size: 20px; letter-spacing: .04em; }
+  .mark b { color: var(--brass); font-weight: 400; }
+  .quiet { font-size: 14px; color: var(--dim); padding: 8px 2px; }
+  .quiet:hover, .quiet:focus-visible { color: var(--fg); }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; border-radius: 4px; }
+
+  /* ---------- course list ---------- */
+  #list { max-width: 1240px; margin: 0 auto; padding: 0 clamp(18px, 4vw, 48px) 64px; }
+  #list h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 5vw, 54px); margin: 28px 0 6px; letter-spacing: -.01em; }
+  #list .lede { color: var(--dim); font-size: 16px; margin: 0 0 36px; }
+  .courses { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 24px; }
+  .course { display: flex; flex-direction: column; background: var(--felt); border: 1px solid var(--line); border-radius: 14px;
+    overflow: hidden; transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
+  a.course:hover, a.course:focus-visible { transform: translateY(-4px); border-color: rgba(201,165,92,.6); box-shadow: 0 18px 40px rgba(0,0,0,.35); }
+  .course .art { aspect-ratio: 16 / 10; background: linear-gradient(160deg, #1d4a31, #12301f); position: relative; }
+  .course .art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .course .body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 16px; flex: 1; }
+  .course h2 { font-family: var(--serif); font-weight: 400; font-size: 26px; margin: 0 0 4px; }
+  .course .where { color: var(--dim); font-size: 14px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 12px 0; margin: 0; }
+  .stats div + div { border-left: 1px solid var(--line); padding-left: 12px; }
+  .stats dt { font-size: 12px; color: var(--dim); margin-bottom: 3px; }
+  .stats dd { margin: 0; font-size: 19px; font-variant-numeric: tabular-nums; }
+  .course .go { margin-top: auto; display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--brass); }
+  .course.soon { opacity: .62; }
+  .course.soon .art { filter: saturate(.35); }
+  .course.soon .go { color: var(--dim); }
+  .tag { border: 1px solid currentColor; border-radius: 99px; padding: 3px 11px; font-size: 12px; }
+
+  /* ---------- scorecard ---------- */
+  #card { min-height: 100vh; display: flex; flex-direction: column; }
+  .stage { flex: 1; display: grid; place-items: center; padding: 8px 3vw 0; }
+  /* The frame sizes the card and is the container its cqw type scales against; the card itself must stay a plain 3D box. */
+  .frame { width: min(94vw, 1180px, calc((100vh - 250px) * 2.45)); min-width: 560px; container-type: inline-size; perspective: 1900px;
+    animation: rise .8s cubic-bezier(.2,.75,.2,1) backwards; }
+  .card { --rx: 0deg; --ry: 0deg; position: relative;
+    transform-style: preserve-3d; transform: rotateX(var(--rx)) rotateY(var(--ry)); transition: transform .9s cubic-bezier(.2,.75,.2,1);
+    cursor: grab; touch-action: pan-y; }
+  .card.live { transition: transform .12s linear; }
+  .card.drag { transition: none; cursor: grabbing; }
+  @keyframes rise { from { opacity: 0; transform: translateY(40px); } }
+  .face { background: var(--paper); color: var(--ink); border-radius: .5cqw; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    overflow: hidden; box-shadow: 0 1px 0 rgba(255,255,255,.5) inset, 0 30px 60px rgba(0,0,0,.45), 0 6px 14px rgba(0,0,0,.3); }
+  /* paper grain, then a soft highlight that follows the pointer */
+  .face::after { content: ""; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply; opacity: .5;
+    background: radial-gradient(60% 90% at var(--mx, 50%) var(--my, 30%), rgba(255,255,255,.0), rgba(120,100,60,.16)),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .4 0 0 0 0 .3 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .front { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; }
+  .front::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 3cqw; transform: translateX(-50%); z-index: 1; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(0,0,0,.14) 48%, rgba(255,255,255,.25) 52%, transparent); }
+  .back { transform: rotateY(180deg); position: relative; }
+  .cover { background: var(--club); color: var(--paper); padding: 4cqw 4.5cqw; display: flex; flex-direction: column; justify-content: space-between; position: relative; }
+  .cover::before { content: ""; position: absolute; inset: 1.4cqw; border: .12cqw solid rgba(201,165,92,.7); pointer-events: none; }
+  .cover .crest { width: 6.5cqw; height: 6.5cqw; color: var(--brass); }
+  .cover h2 { font-family: var(--serif); font-weight: 400; font-size: 5cqw; line-height: 1.02; margin: 0 0 1.2cqw; letter-spacing: -.01em; }
+  .cover p { margin: 0; font-size: 1.45cqw; color: #cfd8c6; }
+  .cover .open { font-size: 1.25cqw; color: var(--brass); }
+  .inside { padding: 3cqw 3.5cqw; display: flex; flex-direction: column; gap: 1.6cqw; }
+  .inside h3 { font-family: var(--serif); font-weight: 400; font-size: 2cqw; margin: 0; }
+  .inside table { width: 100%; border-collapse: collapse; font-size: 1.3cqw; font-variant-numeric: tabular-nums; }
+  .inside th { text-align: right; font-weight: 600; color: #6a705f; font-size: 1.1cqw; padding: .5cqw .6cqw; border-bottom: .12cqw solid var(--ink); }
+  .inside td { text-align: right; padding: .62cqw .6cqw; border-bottom: .08cqw solid var(--rule); }
+  .inside th:first-child, .inside td:first-child { text-align: left; }
+  .inside .note { font-size: 1.05cqw; color: #6a705f; margin-top: auto; line-height: 1.5; }
+  .chip { display: inline-block; width: 1.5cqw; height: .95cqw; border: .08cqw solid rgba(0,0,0,.45); border-radius: .15cqw; vertical-align: -.08cqw; margin-right: .7cqw; }
+
+  .back header { display: flex; justify-content: space-between; align-items: baseline; padding: 1.5cqw 2cqw 1.1cqw; }
+  .back header h3 { font-family: var(--serif); font-weight: 400; font-size: 2.1cqw; margin: 0; }
+  .back header span { font-size: 1.1cqw; color: #6a705f; }
+  table.grid { width: calc(100% - 4cqw); margin: 0 2cqw 2cqw; border-collapse: collapse; table-layout: fixed; font-size: 1.22cqw;
+    font-variant-numeric: tabular-nums; border: .14cqw solid var(--ink); }
+  .grid col.name { width: 13%; } .grid col.rate { width: 9%; } .grid col.tot { width: 4.7%; }
+  .grid th, .grid td { border: .08cqw solid var(--rule); text-align: center; padding: .56cqw 0; height: 2.75cqw; font-weight: 400; overflow: hidden; white-space: nowrap; }
+  .grid th:first-child, .grid td:first-child { text-align: left; padding-left: .9cqw; }
+  .grid thead th { background: var(--club); color: var(--paper); border-color: rgba(255,255,255,.22); font-weight: 600; }
+  .grid .sum { font-weight: 700; background: rgba(28,42,33,.07); }
+  .grid thead .sum { background: #0f2a1c; }
+  .grid tr.par td { font-weight: 700; border-top: .14cqw solid var(--ink); }
+  .grid tr.hcp td { color: #6a705f; font-size: 1.08cqw; }
+  .grid tr.tee { cursor: pointer; }
+  .grid tr.tee td { background: color-mix(in srgb, var(--tee) 15%, transparent); }
+  .grid tr.tee td.sum { background: color-mix(in srgb, var(--tee) 27%, transparent); }
+  .grid tr.tee:hover td, .grid tr.tee:has(:focus-visible) td { background: color-mix(in srgb, var(--tee) 34%, transparent); }
+  .grid tr.tee button { all: unset; cursor: pointer; display: block; width: 100%; font-weight: 600; text-overflow: ellipsis; overflow: hidden; }
+  .grid tr.tee button:focus-visible { outline: none; text-decoration: underline; }
+  .grid tr.tee.on { outline: .28cqw solid #b3261e; outline-offset: -.12cqw; }
+  .grid tr.tee.on td { background: color-mix(in srgb, var(--tee) 34%, transparent); }
+  .grid tr.tee.on button::after { content: " ✓"; color: #b3261e; }
+
+  .dock { display: flex; align-items: center; justify-content: center; gap: 22px; flex-wrap: wrap; padding: 22px 18px 34px; min-height: 104px; }
+  .dock .pick { font-size: 15px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .dock .pick b { color: var(--fg); font-weight: 600; }
+  button.ghost, a.play { font: inherit; font-size: 15px; border-radius: 99px; padding: 11px 22px; cursor: pointer; border: 1px solid var(--line); background: none; color: var(--fg); }
+  button.ghost:hover { background: rgba(255,255,255,.08); }
+  a.play { background: var(--brass); border-color: var(--brass); color: #1d1608; font-weight: 600; }
+  a.play:hover { background: #d9b872; }
+  a.play[aria-disabled="true"] { background: none; color: var(--dim); border-color: var(--line); pointer-events: none; font-weight: 400; }
+  @media (prefers-reduced-motion: reduce) { .card, .card.live, .course, .frame { transition: none; animation: none; } }
+</style>
+</head>
+<body>
+
+<main id="list">
+  <div class="bar" style="padding-inline:0"><span class="mark">Tee<b>box</b></span><a class="quiet" href="/">Driving range</a></div>
+  <h1>Choose a course</h1>
+  <p class="lede">Sacramento, California</p>
+  <div class="courses" id="courses"></div>
+</main>
+
+<main id="card" hidden>
+  <div class="bar"><a class="quiet" href="#">← All courses</a><span class="mark">Tee<b>box</b></span></div>
+  <div class="stage">
+    <div class="frame"><div class="card" id="scorecard">
+      <section class="face back" id="back" inert></section>
+      <section class="face front" id="front"></section>
+    </div></div>
+  </div>
+  <div class="dock">
+    <button class="ghost" id="flip">Open scorecard</button>
+    <span class="pick" id="pick" aria-live="polite"></span>
+    <a class="play" id="play" aria-disabled="true">Tee off on hole 1</a>
+  </div>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const num = (n) => Number(n).toLocaleString('en-US');
+const TEE_COLORS = { gold: '#c9a227', blue: '#2456a6', white: '#ffffff', black: '#1b1b1b', green: '#2f7d4a',
+  red: '#b3261e', silver: '#a9afb5', purple: '#6b3fa0', yellow: '#e2c21f' };
+// Combination tees are named like "blue-white": show both colours on the chip, tint the row with the first.
+const teeParts = (tee) => tee.color.split('-').map((part) => TEE_COLORS[part] || '#888');
+const chip = (tee) => {
+  const [a, b = a] = teeParts(tee);
+  return `<span class="chip" style="background:linear-gradient(90deg,${a} 50%,${b} 50%)"></span>`;
+};
+const sum = (list) => list.reduce((total, n) => total + n, 0);
+
+let catalog = [];
+const loaded = new Map();
+function loadCourse(handle) {
+  if (!loaded.has(handle)) {
+    loaded.set(handle, fetch(`/courses/${encodeURIComponent(handle)}.json`).then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    }));
+  }
+  return loaded.get(handle);
+}
+
+// Routing map: every hole's mapped tee → green line, north up.
+function routing(course, ink, label) {
+  const lat0 = course.holes[0].line[0][1], squash = Math.cos(lat0 * Math.PI / 180);
+  const all = course.holes.flatMap((hole) => hole.line);
+  const xs = all.map((p) => p[0] * squash), ys = all.map((p) => p[1]);
+  const west = Math.min(...xs), north = Math.max(...ys);
+  const scale = Math.min(340 / (Math.max(...xs) - west), 200 / (north - Math.min(...ys)));
+  const offX = (400 - (Math.max(...xs) - west) * scale) / 2, offY = (250 - (north - Math.min(...ys)) * scale) / 2;
+  const at = ([lon, lat]) => [offX + (lon * squash - west) * scale, offY + (north - lat) * scale];
+  const holes = course.holes.map((hole) => {
+    const points = hole.line.map(at), tee = points[0], green = points[points.length - 1];
+    return `<polyline points="${points.map((p) => p.map((v) => v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="${ink}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity=".85"/>` +
+      `<circle cx="${green[0].toFixed(1)}" cy="${green[1].toFixed(1)}" r="3.4" fill="${ink}"/>` +
+      `<text x="${tee[0].toFixed(1)}" y="${(tee[1] + 3).toFixed(1)}" font-size="8.5" text-anchor="middle" fill="${label}" stroke="${label === '#fff' ? '#12301f' : '#f4eedd'}" stroke-width="2.6" paint-order="stroke" font-family="system-ui,sans-serif" font-weight="600">${hole.number}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 400 250" role="img" aria-label="Course routing map">${holes}</svg>`;
+}
+const CONTOURS = `<svg viewBox="0 0 400 250" aria-hidden="true">${[0, 1, 2, 3, 4, 5].map((i) =>
+  `<ellipse cx="${150 + i * 14}" cy="${130 - i * 5}" rx="${190 - i * 30}" ry="${108 - i * 17}" fill="none" stroke="#dfe9d8" stroke-width="1.2" opacity=".3" transform="rotate(-14 200 125)"/>`).join('')}</svg>`;
+
+function renderList() {
+  $('#courses').innerHTML = catalog.map((item) => {
+    const soon = item.comingSoon;
+    const inner = `<div class="art" data-art="${esc(item.handle)}">${CONTOURS}</div><div class="body">
+      <div><h2>${esc(item.name)}</h2><div class="where">${esc([item.location, item.architect].filter(Boolean).join(' · '))}</div></div>
+      <dl class="stats"><div><dt>Par</dt><dd>${esc(item.par ?? '–')}</dd></div><div><dt>Yards</dt><dd>${item.yards ? num(item.yards) : '–'}</dd></div>
+        <div><dt>Rating</dt><dd>${item.rating ? item.rating.toFixed(1) : '–'}</dd></div><div><dt>Slope</dt><dd>${esc(item.slope ?? '–')}</dd></div></dl>
+      <div class="go">${soon ? '<span class="tag">Coming soon</span><span></span>' : `<span>${esc(item.holes ?? 18)} holes · terrain mapped</span><span>View scorecard →</span>`}</div></div>`;
+    return soon ? `<div class="course soon" aria-disabled="true">${inner}</div>` : `<a class="course" href="#${esc(item.handle)}">${inner}</a>`;
+  }).join('');
+  for (const item of catalog.filter((entry) => !entry.comingSoon)) {
+    loadCourse(item.handle).then((course) => {
+      $(`[data-art="${CSS.escape(item.handle)}"]`).innerHTML = routing(course, '#e9f1e2', '#fff');
+    }).catch(() => { /* keep the placeholder art */ });
+  }
+}
+
+// ---------- scorecard ----------
+const card = $('#scorecard');
+let current = null, tee = null, turn = 0;   // turn: 0 = cover, 180 = inside
+
+function renderCard(item, course) {
+  const tees = course.tees || [];
+  $('#front').innerHTML = `<div class="cover">
+      <svg class="crest" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="24" cy="24" r="22"/><path d="M20 36V11l13 5-13 5"/><path d="M12 36c4-3 20-3 24 0"/></svg>
+      <div><h2>${esc(item.name)}</h2><p>${esc([item.location, item.architect && `Designed by ${item.architect}`].filter(Boolean).join(' · '))}</p></div>
+      <span class="open">Click the card to open →</span></div>
+    <div class="inside"><h3>Course rating</h3>
+      <table><thead><tr><th>Tees</th><th>Yards</th><th>Men</th><th>Women</th></tr></thead><tbody>${tees.map((t) =>
+        `<tr><td>${chip(t)}${esc(t.name)}</td><td>${num(t.yards)}</td><td>${t.rating ? `${t.rating.toFixed(1)} / ${t.slope}` : '–'}</td><td>${t.ladies ? `${t.ladies.rating.toFixed(1)} / ${t.ladies.slope}` : '–'}</td></tr>`).join('')}</tbody></table>
+      <p class="note">Yardages and ratings from BlueGolf. Terrain from USGS 3DEP.<br>Only the back tees are mapped; forward tees are placed along the hole's centerline by yardage.</p></div>`;
+
+  const nine = (cells, total, tag = 'td') => cells.map((c) => `<${tag}>${c}</${tag}>`).join('') + `<${tag} class="sum">${total}</${tag}>`;
+  const row = (cls, label, values, last, attrs = '') => {
+    const totals = cls !== 'hcp' && values.every(Number.isFinite);
+    return `<tr class="${cls}"${attrs}><td>${label}</td>${nine(values.slice(0, 9), totals ? sum(values.slice(0, 9)) : '')}${
+      nine(values.slice(9), totals ? sum(values.slice(9)) : '')}<td class="sum">${totals ? num(sum(values)) : ''}</td><td>${last}</td></tr>`;
+  };
+  const numbers = course.holes.map((hole) => hole.number);
+  $('#back').innerHTML = `<header><h3>${esc(item.name)}</h3><span>Select the tees you are playing</span></header>
+    <table class="grid"><colgroup><col class="name"><col span="9"><col class="tot"><col span="9"><col class="tot" span="2"><col class="rate"></colgroup>
+    <thead><tr><th>Hole</th>${nine(numbers.slice(0, 9), 'Out', 'th')}${nine(numbers.slice(9), 'In', 'th')}<th class="sum">Total</th><th>Rating / Slope</th></tr></thead>
+    <tbody>${tees.map((t) => row('tee', `<button type="button" aria-pressed="false">${chip(t)}${esc(t.name.replace(' Combo', ''))}</button>`, t.distances,
+      t.rating ? `${t.rating.toFixed(1)} / ${t.slope}` : '', ` data-tee="${esc(t.name)}" style="--tee:${teeParts(t)[0]}"`)).join('')}
+    ${row('par', 'Par', course.holes.map((hole) => hole.par), '')}
+    ${row('hcp', 'Handicap', course.holes.map((hole) => hole.handicap ?? ''), '')}
+    ${row('', 'Player', numbers.map(() => ''), '')}${row('', 'Player', numbers.map(() => ''), '')}</tbody></table>`;
+}
+
+function setTurn(next) {
+  turn = next;
+  const open = ((turn % 360) + 360) % 360 === 180;
+  card.style.setProperty('--ry', `${turn}deg`);
+  card.style.setProperty('--rx', '0deg');
+  $('#back').inert = !open; $('#front').inert = open;
+  $('#flip').textContent = open ? 'Show cover' : 'Open scorecard';
+}
+function chooseTee(name) {
+  tee = current.course.tees.find((item) => item.name === name) || null;
+  for (const rowEl of document.querySelectorAll('#back tr.tee')) {
+    const on = rowEl.dataset.tee === name;
+    rowEl.classList.toggle('on', on);
+    rowEl.querySelector('button').setAttribute('aria-pressed', on);
+  }
+  $('#pick').innerHTML = tee
+    ? `<b>${esc(tee.name)}</b> · ${num(tee.yards)} yd · par ${esc(tee.par)}${tee.rating ? ` · ${tee.rating.toFixed(1)} / ${tee.slope}` : ''}`
+    : 'Open the card and pick your tees';
+  const play = $('#play');
+  play.setAttribute('aria-disabled', String(!tee));
+  if (tee) play.href = `/?${new URLSearchParams({ course: current.item.handle, tee: tee.name, hole: current.course.holes[0].number })}`;
+  else play.removeAttribute('href');
+}
+
+// Tilt toward the pointer; drag sideways to turn the card over.
+let drag = null, dragged = false;
+const stage = $('.stage');
+stage.addEventListener('pointermove', (event) => {
+  const box = stage.getBoundingClientRect();
+  const px = (event.clientX - box.left) / box.width, py = (event.clientY - box.top) / box.height;
+  if (drag) {
+    const dx = event.clientX - drag.x;
+    if (Math.abs(dx) > 6) { dragged = true; card.classList.add('drag'); }
+    if (dragged) card.style.setProperty('--ry', `${turn + dx * 0.35}deg`);
+    return;
+  }
+  card.classList.add('live');
+  card.style.setProperty('--ry', `${turn + (px - 0.5) * 12}deg`);
+  card.style.setProperty('--rx', `${(0.5 - py) * 9}deg`);
+  const open = ((turn % 360) + 360) % 360 === 180;
+  card.style.setProperty('--mx', `${(open ? 1 - px : px) * 100}%`);
+  card.style.setProperty('--my', `${py * 100}%`);
+});
+stage.addEventListener('pointerleave', () => { if (!drag) { card.classList.remove('live'); setTurn(turn); } });
+card.addEventListener('pointerdown', (event) => { drag = { x: event.clientX }; dragged = false; });
+addEventListener('pointerup', (event) => {
+  if (!drag) return;
+  const dx = event.clientX - drag.x;
+  drag = null;
+  card.classList.remove('drag', 'live');
+  if (dragged) setTurn(Math.round((turn + dx * 0.35) / 180) * 180);
+});
+// A drag must not also count as a click on whatever was under the pointer.
+card.addEventListener('click', (event) => {
+  if (dragged) { dragged = false; event.stopPropagation(); event.preventDefault(); return; }
+  const rowEl = event.target.closest('tr.tee');
+  if (rowEl) chooseTee(rowEl.dataset.tee);
+  else if (event.target.closest('#front')) { card.classList.remove('live'); setTurn(turn + 180); }
+}, true);
+$('#flip').onclick = () => { card.classList.remove('live'); setTurn(turn + 180); };
+
+async function route() {
+  const handle = decodeURIComponent(location.hash.slice(1));
+  const item = catalog.find((entry) => entry.handle === handle && !entry.comingSoon);
+  $('#list').hidden = !!item; $('#card').hidden = !item;
+  document.title = item ? `${item.name} · Scorecard` : 'Teebox · Courses';
+  if (!item) return;
+  try {
+    current = { item, course: await loadCourse(handle) };
+    renderCard(item, current.course);
+    setTurn(0); chooseTee(null);
+    scrollTo(0, 0);
+  } catch (error) {
+    $('#front').innerHTML = `<div class="cover"><div><h2>${esc(item.name)}</h2><p>Course unavailable: ${esc(error.message)}</p></div></div><div class="inside"></div>`;
+  }
+}
+addEventListener('hashchange', route);
+fetch('/courses/index.json').then((response) => {
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}).then((items) => { catalog = items; renderList(); route(); })
+  .catch((error) => { $('#courses').textContent = `Course catalog unavailable: ${error.message}`; });
+</script>
+</body>
+</html>

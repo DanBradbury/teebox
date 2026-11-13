@@ -16,7 +16,7 @@ function convert(full, geo) {
       throw new Error(`Invalid geometry for hole ${number}`);
     }
     return {
-      number, par: source.par, distance: source.distance,
+      number, par: source.par, handicap: source.handicap, distance: source.distance,
       line: line.map(([lon, lat]) => [lon, lat]),
       features: (source.features || []).filter((f) => Number.isFinite(f.centerlat ?? f.frontlat) &&
         Number.isFinite(f.centerlon ?? f.frontlon)).map((f) => ({
@@ -25,7 +25,24 @@ function convert(full, geo) {
     };
   });
   holes.sort((a, b) => a.number - b.number);
-  return { handle: full.handle, name: full.name, holes };
+  return { handle: full.handle, name: full.name, holes, tees: convertTees(full.tees) };
+}
+
+// One scorecard row per tee colour, longest first. BlueGolf lists men's and ladies' ratings as separate tees.
+function convertTees(source = []) {
+  const tees = [];
+  for (const tee of source) {
+    if (tee.isarchived || !Array.isArray(tee.holes) || !tee.holes.every((hole) => Number.isFinite(hole.distance))) continue;
+    const rated = { par: tee.par, rating: Number(tee.rating), slope: tee.slope };
+    let row = tees.find((item) => item.name === tee.name);
+    if (!row) {
+      const distances = tee.holes.map((hole) => hole.distance);
+      row = { name: tee.name, color: tee.color, yards: distances.reduce((sum, d) => sum + d, 0), distances };
+      tees.push(row);
+    }
+    if (tee.type === 'LADY') row.ladies = rated; else Object.assign(row, rated);
+  }
+  return tees.sort((a, b) => b.yards - a.yards);
 }
 
 if (require.main === module) {
@@ -42,10 +59,14 @@ if (require.main === module) {
   const catalogPath = path.join(dir, 'index.json');
   const catalog = fs.existsSync(catalogPath) ? JSON.parse(fs.readFileSync(catalogPath)) : [];
   const next = catalog.filter((entry) => entry.handle !== course.handle);
-  next.push({ handle: course.handle, name: course.name });
+  // Keep hand-written catalog details (location, architect); refresh the headline numbers from the longest tee.
+  const back = course.tees[0];
+  next.push({ ...catalog.find((entry) => entry.handle === course.handle), handle: course.handle, name: course.name,
+    holes: course.holes.length,
+    ...(back && { par: back.par, yards: back.yards, rating: back.rating, slope: back.slope }) });
   next.sort((a, b) => a.name.localeCompare(b.name));
   fs.writeFileSync(catalogPath, JSON.stringify(next));
   console.log(`Imported ${course.name}: ${course.holes.length} holes`);
 }
 
-module.exports = { convert };
+module.exports = { convert, convertTees };
