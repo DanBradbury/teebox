@@ -1,6 +1,6 @@
 // Golf ball flight, bounce and roll from first principles.
 // Units in: mph, degrees, rpm. Internal: SI (m, s, rad). See docs/PHYSICS.md for the model and its sources.
-// Coordinates: x = right of target line, y = up, z = downrange.
+// Coordinates: x = right of target line, y = up, z = downrange. The ground is y = 0 unless a height map is given.
 (function (root) {
   const MPH = 0.44704, RPM = Math.PI / 30, YD = 0.9144, FT = 0.3048, DEG = Math.PI / 180;
   const G = 9.80665;
@@ -62,19 +62,29 @@
 
   const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   const len = (a) => Math.hypot(a[0], a[1], a[2]);
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const FLAT = [0, 1, 0];
+  const SLOPE_SPAN = 2, SLOPE_MAX = 1;         // slope is read over +/- 2 m and capped at 45 degrees
 
   // Penner's normal coefficient of restitution for a ball landing on turf (vn in m/s).
   const restitution = (vn) => (vn < 20 ? 0.510 - 0.0375 * vn + 0.000903 * vn * vn : 0.120);
 
   // Rigid-sphere bounce with Coulomb friction off turf that gives under the ball (after Penner 2002).
-  // Returns new velocity and spin. v, w are 3-vectors; the ground is the plane y = 0.
-  function bounce(v, w, turf) {
-    const vh = Math.hypot(v[0], v[2]), speed = len(v);
-    const hd = vh > 1e-6 ? [v[0] / vh, v[2] / vh] : [0, 1];
+  // Returns new velocity and spin. v, w are 3-vectors; up is the unit normal of the ground (default: level).
+  function bounce(v, w, turf, up) {
+    const N = up || FLAT;
+    const vd = -dot(v, N), speed = len(v);                             // speed into the ground
+    const vs = [v[0] + vd * N[0], v[1] + vd * N[1], v[2] + vd * N[2]], vh = len(vs);   // speed along it
+    let hd = [vs[0] / vh, vs[1] / vh, vs[2] / vh];
+    if (!(vh > 1e-6)) {                                                // straight down: downrange along the ground
+      const m = Math.hypot(N[2] * N[0], N[2] * N[1], 1 - N[2] * N[2]) || 1;
+      hd = [-N[2] * N[0] / m, -N[2] * N[1] / m, (1 - N[2] * N[2]) / m];
+    }
     // The ball digs a pitch mark; the net reaction acts as if the surface were tilted toward the ball.
-    const impactDeg = Math.atan2(-v[1], vh) / DEG;
+    const impactDeg = Math.atan2(vd, vh) / DEG;
     const tilt = Math.min(30, 15.4 * (speed / 18.6) * (impactDeg / 44.4) * turf.dig) * DEG;
-    const n = [-Math.sin(tilt) * hd[0], Math.cos(tilt), -Math.sin(tilt) * hd[1]];
+    const ct = Math.cos(tilt), st = Math.sin(tilt);
+    const n = [ct * N[0] - st * hd[0], ct * N[1] - st * hd[1], ct * N[2] - st * hd[2]];
     const vn = -(v[0] * n[0] + v[1] * n[1] + v[2] * n[2]);
     if (vn <= 0) return { v: v.slice(), w: w.slice() };
     const vt = [v[0] + vn * n[0], v[1] + vn * n[1], v[2] + vn * n[2]];
@@ -97,9 +107,10 @@
   }
 
   // shot: { speed mph, vla deg, hla deg, backspin rpm, sidespin rpm }
-  // opts: { tempF|tempC, altitudeFt|altitudeM, humidity %, pressurePa, windMph, windFrom deg, surface }
+  // opts: { tempF|tempC, altitudeFt|altitudeM, humidity %, pressurePa, windMph, windFrom deg, surface, heightAt }
   //   windFrom is where the wind comes from relative to the target line: 0 = headwind, 90 = from the right,
   //   180 = tailwind, 270 = from the left. windMph is measured at 10 m, as weather stations report it.
+  //   heightAt(x, z) is the ground height in metres at a point in metres; without it the ground is level.
   function simulate(shot, opts) {
     opts = opts || {};
     const air = atmosphere(opts);
@@ -107,6 +118,19 @@
     const windRef = (opts.windMph || 0) * MPH, wf = (opts.windFrom || 0) * DEG;
     const windDir = [-Math.sin(wf), 0, -Math.cos(wf)];                 // direction the air moves
     const windAt = (h) => (windRef > 0 && h > Z0 ? windRef * Math.log(h / Z0) / Math.log(WIND_REF / Z0) : 0);
+
+    const heightAt = typeof opts.heightAt === 'function' ? opts.heightAt : null;
+    const ground = (x, z) => { const h = heightAt ? heightAt(x, z) : 0; return Number.isFinite(h) ? h : 0; };
+    // Unit normal of the ground, from the height difference across a short span.
+    const normalAt = (x, z) => {
+      if (!heightAt) return FLAT;
+      let sx = (ground(x + SLOPE_SPAN, z) - ground(x - SLOPE_SPAN, z)) / (2 * SLOPE_SPAN);
+      let sz = (ground(x, z + SLOPE_SPAN) - ground(x, z - SLOPE_SPAN)) / (2 * SLOPE_SPAN);
+      const s = Math.hypot(sx, sz);
+      if (s > SLOPE_MAX) { sx *= SLOPE_MAX / s; sz *= SLOPE_MAX / s; }
+      const m = Math.hypot(sx, 1, sz);
+      return [-sx / m, 1 / m, -sz / m];
+    };
 
     const dt = 0.004, sampleEvery = 5;          // RK4 at 250 Hz, path sampled every 20 ms
     const v0 = shot.speed * MPH, vla = shot.vla * DEG, hla = shot.hla * DEG;
@@ -118,7 +142,8 @@
     const up = cross(d, r);
     // spin vector (rad/s): backspin about -right, sidespin about up (+ = curves right)
     let w = [-back * r[0] + side * up[0], -back * r[1] + side * up[1], -back * r[2] + side * up[2]];
-    let p = [0, 0, 0], v = [v0 * d[0], v0 * d[1], v0 * d[2]], t = 0;
+    const startY = ground(0, 0);
+    let p = [0, startY, 0], v = [v0 * d[0], v0 * d[1], v0 * d[2]], t = 0;
 
     // d/dt of [velocity, spin] in the air. Forces act on the velocity relative to the moving air.
     const deriv = (y, vel, ws, wdir) => {
@@ -136,10 +161,10 @@
       };
     };
 
-    const pts = [[0, 0, 0, 0]];                 // [t, x, y, z]
+    const pts = [[0, 0, startY, 0]];            // [t, x, y, z]
     const bounces = [];
     let carry = null, apex = 0, landAngle = 0, landSpeed = 0, landSpin = 0, step = 0;
-    let mode = v[1] > 0 ? 'air' : 'ground';
+    let mode = dot(v, normalAt(0, 0)) > 0 ? 'air' : 'ground';
     const decel = rollDecel(turf);
 
     while (t < 90 && step < 30000) {
@@ -148,59 +173,77 @@
         // RK4 on position, velocity and spin rate; the spin axis stays fixed in flight (gyroscopic)
         const wm = len(w), wdir = wm > 1e-9 ? [w[0] / wm, w[1] / wm, w[2] / wm] : [0, 0, 0];
         const add = (a, b, h) => [a[0] + b[0] * h, a[1] + b[1] * h, a[2] + b[2] * h];
-        const k1 = deriv(p[1], v, wm, wdir);
-        const v2 = add(v, k1.a, dt / 2), k2 = deriv(p[1] + v[1] * dt / 2, v2, wm + k1.dw * dt / 2, wdir);
-        const v3 = add(v, k2.a, dt / 2), k3 = deriv(p[1] + v2[1] * dt / 2, v3, wm + k2.dw * dt / 2, wdir);
-        const v4 = add(v, k3.a, dt), k4 = deriv(p[1] + v3[1] * dt, v4, wm + k3.dw * dt, wdir);
+        const clear = p[1] - ground(p[0], p[2]);                         // height above the ground, for the wind
+        const k1 = deriv(clear, v, wm, wdir);
+        const v2 = add(v, k1.a, dt / 2), k2 = deriv(clear + v[1] * dt / 2, v2, wm + k1.dw * dt / 2, wdir);
+        const v3 = add(v, k2.a, dt / 2), k3 = deriv(clear + v2[1] * dt / 2, v3, wm + k2.dw * dt / 2, wdir);
+        const v4 = add(v, k3.a, dt), k4 = deriv(clear + v3[1] * dt, v4, wm + k3.dw * dt, wdir);
         let np = [0, 0, 0], nv = [0, 0, 0];
         for (let i = 0; i < 3; i++) {
           np[i] = p[i] + dt / 6 * (v[i] + 2 * v2[i] + 2 * v3[i] + v4[i]);
           nv[i] = v[i] + dt / 6 * (k1.a[i] + 2 * k2.a[i] + 2 * k3.a[i] + k4.a[i]);
         }
-        let nwm = Math.max(0, wm + dt / 6 * (k1.dw + 2 * k2.dw + 2 * k3.dw + k4.dw)), h = dt;
-        if (np[1] <= 0 && nv[1] < 0) {          // crossed the ground: back up to the moment of contact
-          const f = p[1] > 0 ? p[1] / (p[1] - np[1]) : 0;
+        let nwm = Math.max(0, wm + dt / 6 * (k1.dw + 2 * k2.dw + 2 * k3.dw + k4.dw)), h = dt, hit = false;
+        const under = ground(np[0], np[2]) - np[1];
+        if (under >= 0 && dot(nv, normalAt(np[0], np[2])) < 0) {   // crossed the ground: back up to the moment of contact
+          const f = clear > 0 ? clear / (clear + under) : 0;
           for (let i = 0; i < 3; i++) { np[i] = p[i] + (np[i] - p[i]) * f; nv[i] = v[i] + (nv[i] - v[i]) * f; }
-          nwm = wm + (nwm - wm) * f; h = dt * f; np[1] = 0;
+          nwm = wm + (nwm - wm) * f; h = dt * f; np[1] = ground(np[0], np[2]); hit = true;
         }
         p = np; v = nv; t += h; w = [wdir[0] * nwm, wdir[1] * nwm, wdir[2] * nwm];
-        if (p[1] > apex) apex = p[1];
+        if (p[1] - startY > apex) apex = p[1] - startY;
 
-        if (p[1] === 0 && v[1] < 0) {           // ground contact
-          const vh = Math.hypot(v[0], v[2]);
+        if (hit) {                              // ground contact
+          const vh = Math.hypot(v[0], v[2]), N = normalAt(p[0], p[2]);
           if (carry === null) {
-            carry = { x: p[0], z: p[2], t };
+            carry = { x: p[0], y: p[1], z: p[2], t };
             landAngle = Math.atan2(-v[1], vh) / DEG;
             landSpeed = len(v) / MPH; landSpin = len(w) / RPM;
           }
-          const out = bounce(v, w, turf);
+          const out = bounce(v, w, turf, N);
           v = out.v; w = out.w;
           bounces.push({ x: p[0], z: p[2], t });
           // a hop lower than the grass (about 2 cm) is a roll
-          if (v[1] < 0.6 || bounces.length > 40) { mode = 'ground'; v[1] = 0; }
+          const vo = dot(v, N);
+          if (vo < 0.6 || bounces.length > 40) { mode = 'ground'; for (let i = 0; i < 3; i++) v[i] -= vo * N[i]; }
         }
       } else {
         // On the ground: slide under kinetic friction until the contact point stops slipping, then roll.
-        const vh = Math.hypot(v[0], v[2]);
-        const u = [v[0] + R * w[2], v[2] - R * w[0]], um = Math.hypot(u[0], u[1]);   // contact slip (x, z)
+        // Gravity pulls the ball down the slope, and the turf only carries the part of its weight normal to it.
+        const N = normalAt(p[0], p[2]), press = G * N[1];
+        const gt = [press * N[0], press * N[1] - G, press * N[2]];       // gravity along the slope
+        const vn = dot(v, N), wn = dot(w, N);
+        for (let i = 0; i < 3; i++) v[i] -= vn * N[i];                   // the ball follows the ground
+        const rc = [-R * N[0], -R * N[1], -R * N[2]], s = cross(w, rc);
+        const u = [v[0] + s[0], v[1] + s[1], v[2] + s[2]], um = len(u);  // contact slip
         if (um > 0.02) {
-          const a = turf.mu * G, k = Math.min(1, um / (3.5 * a * dt));   // do not overshoot zero slip
-          const ax = -a * k * u[0] / um, az = -a * k * u[1] / um;
-          v[0] += ax * dt; v[2] += az * dt;
-          w[0] -= 2.5 * az / R * dt; w[2] += 2.5 * ax / R * dt;
+          const a = turf.mu * press, k = Math.min(1, um / (3.5 * a * dt));   // do not overshoot zero slip
+          const af = [-a * k * u[0] / um, -a * k * u[1] / um, -a * k * u[2] / um];
+          const tq = cross(rc, af);
+          for (let i = 0; i < 3; i++) { v[i] += (af[i] + gt[i]) * dt; w[i] += 2.5 * tq[i] / (R * R) * dt; }
         } else {
-          const dec = decel * dt;
-          if (vh <= dec) break;
-          v[0] -= v[0] / vh * dec; v[2] -= v[2] / vh * dec;
-          w[0] = v[2] / R; w[2] = -v[0] / R;                             // rolling without slipping
+          // A rolling solid sphere keeps 5/7 of the pull of gravity; rolling resistance holds it on gentle slopes.
+          const pull = [gt[0] * 5 / 7, gt[1] * 5 / 7, gt[2] * 5 / 7], pm = len(pull), res = decel * N[1];
+          for (let i = 0; i < 3; i++) v[i] += pull[i] * dt;
+          const sp = len(v);
+          if (sp <= res * dt) {
+            if (pm <= res) break;                                        // at rest
+            for (let i = 0; i < 3; i++) v[i] = pull[i] * (1 - res / pm) * dt;   // turns round and runs back down
+          } else {
+            for (let i = 0; i < 3; i++) v[i] -= v[i] / sp * res * dt;
+          }
+          const roll = cross(N, v);                                      // rolling without slipping
+          for (let i = 0; i < 3; i++) w[i] = roll[i] / R + wn * N[i];
         }
-        w[1] *= Math.exp(-2 * dt);                                       // turf scrubs off spin about the vertical
-        p[0] += v[0] * dt; p[2] += v[2] * dt; p[1] = 0; t += dt;
+        const scrub = wn * (1 - Math.exp(-2 * dt));                      // turf scrubs off spin about the normal
+        for (let i = 0; i < 3; i++) w[i] -= scrub * N[i];
+        p[0] += v[0] * dt; p[2] += v[2] * dt; p[1] = ground(p[0], p[2]); t += dt;
       }
       if (step % sampleEvery === 0) pts.push([t, p[0], p[1], p[2]]);
     }
-    pts.push([t, p[0], 0, p[2]]);
-    if (carry === null) carry = { x: p[0], z: p[2], t };
+    p[1] = ground(p[0], p[2]);
+    pts.push([t, p[0], p[1], p[2]]);
+    if (carry === null) carry = { x: p[0], y: p[1], z: p[2], t };
     const toYd = (m) => m / YD;
     return {
       path: pts, bounces,
@@ -209,6 +252,7 @@
       totalYd: toYd(Math.hypot(p[0], p[2])),
       totalX: toYd(p[0]), totalZ: toYd(p[2]),
       apexFt: apex / FT,
+      carryRiseFt: (carry.y - startY) / FT, totalRiseFt: (p[1] - startY) / FT,   // ground height vs the tee
       hangTime: carry.t,
       landAngle, landSpeed, landSpin,
       duration: t,

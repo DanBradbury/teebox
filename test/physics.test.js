@@ -144,3 +144,71 @@ test('randomShot produces plausible values for every club', () => {
     assert.ok(Number.isFinite(P.simulate(s).carryYd));
   }
 });
+
+// ---------- slopes ----------
+const drive = { speed: 150, vla: 12, hla: 0, backspin: 2600, sidespin: 0 };
+const slope = (gx, gz, shot = drive, opts = {}) => P.simulate(shot, { ...opts, heightAt: (x, z) => gx * x + gz * z });
+
+test('a level height map changes nothing', () => {
+  const flat = P.simulate(drive), mapped = P.simulate(drive, { heightAt: () => 0 });
+  assert.equal(mapped.carryYd, flat.carryYd);
+  assert.ok(Math.abs(mapped.totalYd - flat.totalYd) < 1e-6);
+  assert.equal(flat.carryRiseFt, 0);
+});
+
+test('uphill shots carry and roll less, downhill shots more', () => {
+  const up = slope(0, 0.05), level = P.simulate(drive), down = slope(0, -0.05);
+  assert.ok(up.carryYd < level.carryYd - 5 && down.carryYd > level.carryYd + 5);
+  assert.ok(up.totalYd < level.totalYd && down.totalYd > level.totalYd);
+  assert.ok(up.carryRiseFt > 20 && down.carryRiseFt < -20);
+  // the landing point sits on the slope
+  assert.ok(Math.abs(up.carryRiseFt * 0.3048 - 0.05 * up.carryZ * P.YD) < 0.01);
+});
+
+test('a sidehill kicks and feeds the ball down the slope without moving the carry', () => {
+  const level = P.simulate(drive), right = slope(0.06, 0), left = slope(-0.06, 0);   // ground rises to the right / left
+  assert.ok(Math.abs(right.carryX - level.carryX) < 0.01);
+  assert.ok(right.totalX < level.totalX - 2, `kicked ${right.totalX}`);
+  assert.ok(left.totalX > level.totalX + 2, `kicked ${left.totalX}`);
+});
+
+test('the path follows the ground while the ball rolls and never goes under it', () => {
+  const heightAt = (x, z) => 3 * Math.sin(z / 40) + 0.04 * x;
+  const r = P.simulate(drive, { heightAt });
+  for (const [, x, y, z] of r.path) assert.ok(y >= heightAt(x, z) - 0.05, `under ground at z=${z}`);
+  const [, x, y, z] = r.path[r.path.length - 1];
+  assert.ok(Math.abs(y - heightAt(x, z)) < 1e-9);
+  assert.ok(Math.abs(r.totalRiseFt * 0.3048 - y) < 1e-9);
+});
+
+test('a ball holds on a gentle slope and runs off a steep one', () => {
+  const putt = { speed: 6, vla: 0, hla: 0, backspin: 0, sidespin: 0 };
+  const held = slope(0.03, 0, putt, { surface: 'green' });
+  assert.ok(held.duration < 30 && held.totalX < 0, `held after ${held.duration}s`);
+  const ran = slope(0.15, 0, putt, { surface: 'green' });
+  assert.ok(ran.totalX < held.totalX - 20, `ran to ${ran.totalX}`);
+  // rolling straight up a hill it cannot hold on, the ball comes back past where it started
+  const back = slope(0, 0.15, putt, { surface: 'green' });
+  assert.ok(back.totalZ < 0, `came back to ${back.totalZ}`);
+});
+
+test('bounce off a slope: an upslope kills forward speed, a downslope keeps it', () => {
+  const turf = P.SURFACES.fairway, v = [0, -12, 20], tilt = (a) => [0, Math.cos(a), -Math.sin(a)];
+  const up = P.bounce(v, [0, 0, 0], turf, tilt(0.15)), level = P.bounce(v, [0, 0, 0], turf), down = P.bounce(v, [0, 0, 0], turf, tilt(-0.15));
+  assert.ok(up.v[2] < level.v[2] && level.v[2] < down.v[2]);
+  assert.deepEqual(P.bounce(v, [0, 0, 0], turf, [0, 1, 0]), level);
+});
+
+test('real terrain and broken height maps stay finite', () => {
+  const course = require('../public/courses/ancilhoffmangc.json');
+  const { holeWorld } = require('../public/course.js');
+  const maps = course.holes.map((raw) => holeWorld(raw, course.elevation).heightAt);
+  maps.push(() => NaN, (x, z) => (z > 100 ? 25 : 0), (x, z) => -0.5 * z);
+  for (const heightAt of maps) {
+    for (const s of [[150, 12, 2600], [96, 25, 9200], [60, -3, 2000], [100, 2, 500]]) {
+      const r = P.simulate({ speed: s[0], vla: s[1], hla: 2, backspin: s[2], sidespin: 300 }, { heightAt });
+      assert.ok(r.path.every((q) => q.every(Number.isFinite)));
+      assert.ok(Number.isFinite(r.carryYd) && Number.isFinite(r.totalYd) && Number.isFinite(r.totalRiseFt));
+    }
+  }
+});

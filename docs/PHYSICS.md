@@ -120,6 +120,25 @@ distance a ball released at 1.83 m/s would roll, `a = 1.83² / 2d`.
 | Rough        | 0.50       | 0.70      | 1.30        | 1.8             |
 | Green        | 0.40       | 1.00      | 1.00        | 10.0            |
 
+## Slopes
+
+`simulate` takes an optional `heightAt(x, z)` height map (metres). The course scene passes the hole's USGS
+terrain; without one the ground is level and everything above is unchanged.
+
+- **Flight** ends where the path meets the ground, so a shot to a raised green carries less and a shot
+  downhill carries more. Wind speed is taken from the height above the ground below the ball.
+- **Bounce** uses the same Penner step, measured from the local surface normal instead of the vertical. A
+  ball landing into an upslope hits it more squarely and stops sooner; a downslope gives a shallow, running
+  bounce; a sideslope kicks the ball down the hill. The slope is read across 4 m and capped at 45°.
+- **Roll.** Gravity along the slope, `g_t = g − (g·n) n`, is added to the motion. While sliding the ball feels
+  all of it; while rolling a solid sphere feels `5/7` of it. Friction and rolling resistance scale with the
+  normal load `g cos θ`. The ball stops when it runs out of speed on a slope the rolling resistance can hold,
+  `5/7 · tan θ ≤ a / g`. That is about an 11° slope on the default fairway and 4.5° at a Stimp of 10; on
+  anything steeper it turns round and runs back down.
+
+`r.carryRiseFt` and `r.totalRiseFt` give the height of the landing point and the resting point against the
+tee, and `r.path` holds true heights.
+
 ## How well it matches
 
 Carry is checked against TrackMan's published PGA Tour averages at 25 °C, sea level (model / measured):
@@ -163,7 +182,10 @@ landing angle.
   rolls about 10 yards and on the firm preset about 26. Low, skidding shots roll further than the
   OpenFairway reference set expects (about twice as far on average on the default fairway; the soft preset
   agrees with it most closely).
-- **The ground is flat** and the same everywhere.
+- **The turf is the same everywhere.** Slopes come from the height map, but fairway, rough, green and sand
+  all play as the one turf preset chosen in the conditions panel.
+- **Terrain is as coarse as its height map** (about 4 m for the bundled USGS grid), so small contours on
+  greens are missing. A rolling ball always follows the ground; it does not take off over a crest.
 - **One ball.** The constants describe an average modern tour-type ball. Range balls and low-compression
   balls fly shorter, and limited-flight balls much shorter.
 - **The spin axis does not move in flight**, and spin about the vertical axis is not changed by a bounce.
@@ -185,10 +207,10 @@ const r = P.simulate(
 
 `windFrom` is where the wind comes from, relative to the target line: 0 is a headwind, 90 is from the right,
 180 is a tailwind, 270 is from the left. `surface` is a preset name or an object
-`{ mu, cor, dig, stimpFt }`. Metric inputs `tempC` and `altitudeM` work too, and `pressurePa` overrides the
+`{ mu, cor, dig, stimpFt }`. `heightAt` is an optional ground height function, see Slopes. Metric inputs `tempC` and `altitudeM` work too, and `pressurePa` overrides the
 altitude with a measured station pressure.
 
-`P.atmosphere(opts)`, `P.coefficients(S, Re)`, `P.restitution(vn)` and `P.bounce(v, w, turf)` expose the
+`P.atmosphere(opts)`, `P.coefficients(S, Re)`, `P.restitution(vn)` and `P.bounce(v, w, turf, normal)` expose the
 pieces. `P.AERO` and `P.SURFACES` hold every constant on this page.
 
 ## References
