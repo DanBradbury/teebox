@@ -2,8 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { convert } = require('../scripts/import-course');
-const { holeWorld, sampleElevation, horizonAngle } = require('../public/course');
+const { convert, convertTees } = require('../scripts/import-course');
+const { holeWorld, sampleElevation, horizonAngle, teeLine } = require('../public/course');
 const { horizonProfile } = require('../scripts/import-horizon');
 const { courseBounds } = require('../scripts/import-elevation');
 
@@ -94,4 +94,35 @@ test('sample course skyline covers every azimuth and holes report compass bearin
   // Hole 1 plays north-west from its tee.
   const bearing = holeWorld(imported.holes[0]).bearing;
   assert.ok(bearing < -40 && bearing > -80, `bearing ${bearing}`);
+});
+
+test('import keeps one scorecard row per tee colour with both ratings', () => {
+  const hole = (distance) => ({ par: 4, distance });
+  const tees = convertTees([
+    { name: 'White', color: 'white', type: 'MEN', par: 72, rating: '69.4', slope: 119, holes: [hole(300), hole(350)] },
+    { name: 'Gold', color: 'gold', type: 'MEN', par: 72, rating: '73.3', slope: 132, holes: [hole(349), hole(588)] },
+    { name: 'White', color: 'white', type: 'LADY', par: 73, rating: '74.5', slope: 128, holes: [hole(300), hole(350)] },
+    { name: 'Old', color: 'red', type: 'MEN', isarchived: true, holes: [hole(200), hole(200)] }
+  ]);
+  assert.deepEqual(tees.map((tee) => tee.name), ['Gold', 'White']);
+  assert.deepEqual(tees[1], { name: 'White', color: 'white', yards: 650, distances: [300, 350], par: 72, rating: 69.4, slope: 119,
+    ladies: { par: 73, rating: 74.5, slope: 128 } });
+});
+
+test('sample course tees match its mapped back-tee yardages', () => {
+  assert.equal(imported.tees[0].name, 'Gold');
+  assert.deepEqual(imported.tees[0].distances, imported.holes.map((hole) => hole.distance));
+  assert.ok(imported.tees.every((tee) => tee.distances.length === 18 && tee.yards === tee.distances.reduce((a, b) => a + b, 0)));
+});
+
+test('forward tee starts down the centerline and shortens the hole by the cut', () => {
+  const raw = imported.holes[1];
+  const full = holeWorld(raw);
+  const length = (hole) => hole.centerline.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - hole.centerline[i].x, p.z - hole.centerline[i].z), 0);
+  assert.deepEqual(teeLine(raw.line, 0), raw.line);
+  const forward = holeWorld({ ...raw, line: teeLine(raw.line, 100) });
+  assert.ok(Math.abs(length(full) - length(forward) - 100) < 0.5);
+  // A cut past the dogleg drops that point; one longer than the hole still leaves a playable line.
+  assert.equal(teeLine(raw.line, 400).length, 2);
+  assert.ok(length(holeWorld({ ...raw, line: teeLine(raw.line, 5000) })) >= 19);
 });
