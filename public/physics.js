@@ -55,6 +55,11 @@
     rough:   { label: 'Rough',        mu: 0.50, cor: 0.70, dig: 1.30, stimpFt: 1.8 },
     green:   { label: 'Green',        mu: 0.40, cor: 1.00, dig: 1.00, stimpFt: 10.0 },
   };
+  // What a course puts in the ball's way. Sand swallows the bounce and the roll; water ends the shot where the ball goes in.
+  const HAZARDS = {
+    sand:  { label: 'Bunker sand', mu: 0.60, cor: 0.35, dig: 1.60, stimpFt: 0.5 },
+    water: { label: 'Water', water: true },
+  };
   const STIMP_V = 1.83;                        // release speed of a Stimpmeter, m/s
   // Rolling deceleration (m/s^2) of a surface, from the distance a Stimpmeter roll covers: a = v^2 / 2d.
   const rollDecel = (turf) => STIMP_V * STIMP_V / (2 * turf.stimpFt * FT);
@@ -107,14 +112,19 @@
   }
 
   // shot: { speed mph, vla deg, hla deg, backspin rpm, sidespin rpm }
-  // opts: { tempF|tempC, altitudeFt|altitudeM, humidity %, pressurePa, windMph, windFrom deg, surface, heightAt }
+  // opts: { tempF|tempC, altitudeFt|altitudeM, humidity %, pressurePa, windMph, windFrom deg, surface, heightAt, surfaceAt }
   //   windFrom is where the wind comes from relative to the target line: 0 = headwind, 90 = from the right,
   //   180 = tailwind, 270 = from the left. windMph is measured at 10 m, as weather stations report it.
   //   heightAt(x, z) is the ground height in metres at a point in metres; without it the ground is level.
+  //   surfaceAt(x, z) names the surface at a point (a SURFACES or HAZARDS key, or a turf object); anything else,
+  //   or no function at all, plays as `surface`.
   function simulate(shot, opts) {
     opts = opts || {};
     const air = atmosphere(opts);
     const turf = typeof opts.surface === 'object' && opts.surface ? opts.surface : SURFACES[opts.surface] || SURFACES.fairway;
+    const surfaceAt = typeof opts.surfaceAt === 'function' ? opts.surfaceAt : null;
+    const known = (s) => (typeof s === 'object' && s ? s : SURFACES[s] || HAZARDS[s]);
+    const turfAt = (x, z) => (surfaceAt && known(surfaceAt(x, z))) || turf;
     const windRef = (opts.windMph || 0) * MPH, wf = (opts.windFrom || 0) * DEG;
     const windDir = [-Math.sin(wf), 0, -Math.cos(wf)];                 // direction the air moves
     const windAt = (h) => (windRef > 0 && h > Z0 ? windRef * Math.log(h / Z0) / Math.log(WIND_REF / Z0) : 0);
@@ -163,9 +173,8 @@
 
     const pts = [[0, 0, startY, 0]];            // [t, x, y, z]
     const bounces = [];
-    let carry = null, apex = 0, landAngle = 0, landSpeed = 0, landSpin = 0, step = 0;
+    let carry = null, apex = 0, landAngle = 0, landSpeed = 0, landSpin = 0, step = 0, water = false;
     let mode = dot(v, normalAt(0, 0)) > 0 ? 'air' : 'ground';
-    const decel = rollDecel(turf);
 
     while (t < 90 && step < 30000) {
       step++;
@@ -200,7 +209,9 @@
             landAngle = Math.atan2(-v[1], vh) / DEG;
             landSpeed = len(v) / MPH; landSpin = len(w) / RPM;
           }
-          const out = bounce(v, w, turf, N);
+          const here = turfAt(p[0], p[2]);
+          if (here.water) { water = true; break; }                      // no bounce off water: the ball is gone
+          const out = bounce(v, w, here, N);
           v = out.v; w = out.w;
           bounces.push({ x: p[0], z: p[2], t });
           // a hop lower than the grass (about 2 cm) is a roll
@@ -210,6 +221,8 @@
       } else {
         // On the ground: slide under kinetic friction until the contact point stops slipping, then roll.
         // Gravity pulls the ball down the slope, and the turf only carries the part of its weight normal to it.
+        const here = turfAt(p[0], p[2]);
+        if (here.water) { water = true; break; }                        // rolled in
         const N = normalAt(p[0], p[2]), press = G * N[1];
         const gt = [press * N[0], press * N[1] - G, press * N[2]];       // gravity along the slope
         const vn = dot(v, N), wn = dot(w, N);
@@ -217,13 +230,13 @@
         const rc = [-R * N[0], -R * N[1], -R * N[2]], s = cross(w, rc);
         const u = [v[0] + s[0], v[1] + s[1], v[2] + s[2]], um = len(u);  // contact slip
         if (um > 0.02) {
-          const a = turf.mu * press, k = Math.min(1, um / (3.5 * a * dt));   // do not overshoot zero slip
+          const a = here.mu * press, k = Math.min(1, um / (3.5 * a * dt));   // do not overshoot zero slip
           const af = [-a * k * u[0] / um, -a * k * u[1] / um, -a * k * u[2] / um];
           const tq = cross(rc, af);
           for (let i = 0; i < 3; i++) { v[i] += (af[i] + gt[i]) * dt; w[i] += 2.5 * tq[i] / (R * R) * dt; }
         } else {
           // A rolling solid sphere keeps 5/7 of the pull of gravity; rolling resistance holds it on gentle slopes.
-          const pull = [gt[0] * 5 / 7, gt[1] * 5 / 7, gt[2] * 5 / 7], pm = len(pull), res = decel * N[1];
+          const pull = [gt[0] * 5 / 7, gt[1] * 5 / 7, gt[2] * 5 / 7], pm = len(pull), res = rollDecel(here) * N[1];
           for (let i = 0; i < 3; i++) v[i] += pull[i] * dt;
           const sp = len(v);
           if (sp <= res * dt) {
@@ -256,6 +269,7 @@
       hangTime: carry.t,
       landAngle, landSpeed, landSpin,
       duration: t,
+      water,                                    // true if the ball finished in water; the path ends where it went in
       air,
     };
   }
@@ -276,6 +290,6 @@
       axis: Math.atan2(side, back) * 180 / Math.PI, club };
   }
 
-  const api = { AERO, SURFACES, atmosphere, coefficients, restitution, bounce, simulate, randomShot, CLUBS, YD };
+  const api = { AERO, SURFACES, HAZARDS, atmosphere, coefficients, restitution, bounce, simulate, randomShot, CLUBS, YD };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.GolfPhysics = api;
 })(typeof window !== 'undefined' ? window : globalThis);
