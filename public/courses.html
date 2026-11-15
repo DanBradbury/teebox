@@ -216,7 +216,7 @@ function renderCard(item, course) {
     <div class="inside"><h3>Course rating</h3>
       <table><thead><tr><th>Tees</th><th>Yards</th><th>Men</th><th>Women</th></tr></thead><tbody>${tees.map((t) =>
         `<tr><td>${chip(t)}${esc(t.name)}</td><td>${num(t.yards)}</td><td>${t.rating ? `${t.rating.toFixed(1)} / ${t.slope}` : '–'}</td><td>${t.ladies ? `${t.ladies.rating.toFixed(1)} / ${t.ladies.slope}` : '–'}</td></tr>`).join('')}</tbody></table>
-      <p class="note">Yardages and ratings from BlueGolf. Terrain from USGS 3DEP.<br>Only the back tees are mapped; forward tees are placed along the hole's centerline by yardage.</p></div>`;
+      <p class="note">Yardages and ratings from BlueGolf. Terrain from USGS 3DEP.${course.map ? ' Course outlines © OpenStreetMap contributors.' : ''}<br>Only the back tees are mapped; forward tees are placed along the hole's centerline by yardage.</p></div>`;
 
   const nine = (cells, total, tag = 'td') => cells.map((c) => `<${tag}>${c}</${tag}>`).join('') + `<${tag} class="sum">${total}</${tag}>`;
   const row = (cls, label, values, last, attrs = '') => {

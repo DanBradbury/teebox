@@ -119,6 +119,16 @@ distance a ball released at 1.83 m/s would roll, `a = 1.83² / 2d`.
 | Soft fairway | 0.45       | 0.85      | 1.10        | 3.0             |
 | Rough        | 0.50       | 0.70      | 1.30        | 1.8             |
 | Green        | 0.40       | 1.00      | 1.00        | 10.0            |
+| Bunker sand  | 0.60       | 0.35      | 1.60        | 0.5             |
+
+## Surfaces
+
+`simulate` takes an optional `surfaceAt(x, z)` that names the surface at a point; every bounce and every step
+of the roll uses the turf it lands on. On a course with mapped outlines the scene passes them in: greens play
+as Green, unmapped ground as Rough, bunkers as sand, and fairways and tees as the preset chosen in the
+conditions panel. Sand takes nearly all of the bounce and stops the roll within a pace or two. Water has no
+bounce at all: the shot ends where the ball goes in, whether it flies or rolls there, and the result carries
+`water: true`. The sand row is a reasoned estimate, not a measurement. Cart paths play as the turf around them.
 
 ## Slopes
 
@@ -182,8 +192,9 @@ landing angle.
   rolls about 10 yards and on the firm preset about 26. Low, skidding shots roll further than the
   OpenFairway reference set expects (about twice as far on average on the default fairway; the soft preset
   agrees with it most closely).
-- **The turf is the same everywhere.** Slopes come from the height map, but fairway, rough, green and sand
-  all play as the one turf preset chosen in the conditions panel.
+- **The lie does not change the next shot.** A ball in sand or rough is struck with whatever the launch
+  monitor measured off the mat. On the driving range, and on a course without mapped outlines, the turf is
+  the same everywhere.
 - **Terrain is as coarse as its height map** (about 4 m for the bundled USGS grid), so small contours on
   greens are missing. A rolling ball always follows the ground; it does not take off over a crest.
 - **One ball.** The constants describe an average modern tour-type ball. Range balls and low-compression
@@ -207,11 +218,11 @@ const r = P.simulate(
 
 `windFrom` is where the wind comes from, relative to the target line: 0 is a headwind, 90 is from the right,
 180 is a tailwind, 270 is from the left. `surface` is a preset name or an object
-`{ mu, cor, dig, stimpFt }`. `heightAt` is an optional ground height function, see Slopes. Metric inputs `tempC` and `altitudeM` work too, and `pressurePa` overrides the
+`{ mu, cor, dig, stimpFt }`. `heightAt` is an optional ground height function, see Slopes; `surfaceAt` an optional surface lookup, see Surfaces. Metric inputs `tempC` and `altitudeM` work too, and `pressurePa` overrides the
 altitude with a measured station pressure.
 
 `P.atmosphere(opts)`, `P.coefficients(S, Re)`, `P.restitution(vn)` and `P.bounce(v, w, turf, normal)` expose the
-pieces. `P.AERO` and `P.SURFACES` hold every constant on this page.
+pieces. `P.AERO`, `P.SURFACES` and `P.HAZARDS` hold every constant on this page.
 
 ## References
 

@@ -69,12 +69,13 @@ function courseBounds(course, paddingMetres = 90) {
   return [west - lonPad, south - latPad, east + lonPad, north + latPad];
 }
 
-async function fetchTiff(bbox, width, height, fetchFn = fetch) {
-  const url = new URL(SERVICE);
+// `extra` adds exportImage parameters, such as bandIds for one band of an imagery service.
+async function fetchTiff(bbox, width, height, fetchFn = fetch, service = SERVICE, extra = {}) {
+  const url = new URL(service);
   url.search = new URLSearchParams({ bbox: bbox.join(','), bboxSR: '4326', imageSR: '4326',
-    size: `${width},${height}`, format: 'tiff', pixelType: 'F32', f: 'image' }).toString();
+    size: `${width},${height}`, format: 'tiff', pixelType: 'F32', f: 'image', ...extra }).toString();
   const response = await fetchFn(url, { signal: AbortSignal.timeout(90000) });
-  if (!response.ok) throw new Error(`USGS elevation request failed: HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`USGS request failed: HTTP ${response.status}`);
   return tiffGrid(Buffer.from(await response.arrayBuffer()));
 }
 

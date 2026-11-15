@@ -212,3 +212,38 @@ test('real terrain and broken height maps stay finite', () => {
     }
   }
 });
+
+test('each mapped surface plays as its own turf', () => {
+  const drive = { speed: 150, vla: 12, hla: 0, backspin: 2600, sidespin: 0 };
+  const plain = P.simulate(drive);
+  const on = (name) => P.simulate(drive, { surfaceAt: () => name });
+  // A lookup that names nothing known leaves the shot as it was.
+  assert.deepEqual(on(undefined).path, plain.path);
+  assert.deepEqual(on('fairway').path, plain.path);
+  assert.equal(plain.water, false);
+  const roll = (r) => r.totalYd - r.carryYd;
+  assert.ok(roll(on('sand')) < 1, `sand rolled ${roll(on('sand'))}`);
+  assert.ok(roll(on('rough')) < roll(plain) && roll(plain) < roll(on('green')));
+  assert.equal(on('sand').carryYd, plain.carryYd);
+  // Fairway up to 235 m, sand beyond: the ball runs up to the bunker and dies in it.
+  const edge = P.simulate(drive, { surface: 'firm', surfaceAt: (x, z) => (z > 235 ? 'sand' : null) });
+  const firm = P.simulate(drive, { surface: 'firm' });
+  assert.ok(firm.totalZ * P.YD > 240, 'test needs a drive that runs past the bunker edge');
+  assert.ok(edge.totalZ * P.YD >= 235 && edge.totalZ * P.YD < 236.5, `stopped at ${edge.totalZ * P.YD} m`);
+});
+
+test('water ends the shot where the ball goes in', () => {
+  const drive = { speed: 150, vla: 12, hla: 0, backspin: 2600, sidespin: 0 };
+  const plain = P.simulate(drive);
+  const splash = P.simulate(drive, { surfaceAt: () => 'water' });
+  assert.equal(splash.water, true);
+  assert.equal(splash.totalYd, splash.carryYd);
+  assert.equal(splash.carryYd, plain.carryYd);
+  assert.equal(splash.bounces.length, 0);
+  // Lands short on grass and rolls into a pond.
+  const pond = plain.carryZ * P.YD + 3;
+  const trickle = P.simulate(drive, { surfaceAt: (x, z) => (z > pond ? 'water' : 'fairway') });
+  assert.equal(trickle.water, true);
+  assert.ok(trickle.totalZ * P.YD >= pond && trickle.totalYd < plain.totalYd);
+  assert.ok(trickle.bounces.length > 0);
+});
