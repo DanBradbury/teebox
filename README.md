@@ -20,6 +20,7 @@ It speaks the **GSPro Open Connect** protocol on TCP port 921, so it works with 
 - Physics-based ball flight: lift and drag from spin ratio and Reynolds number, spin decay, and a friction-based bounce and roll
 - Playing conditions: temperature, altitude, humidity, wind and turf firmness all change the flight
 - Session table, dispersion map, club tagging, CSV export
+- Mouse-only game mode with an animated golfer, club selection, aim and pull-back/push-forward swings
 - Built-in "Simulate shot" mode so you can try it with no hardware
 - Works offline. Nothing leaves your machine
 - Pure Node.js (18+) and a single HTML page. No build step, no `npm install`
@@ -36,6 +37,25 @@ Install [Node.js](https://nodejs.org) (LTS), then:
 
 Click **Simulate shot** (or press Space) to try it without a launch monitor.
 Set **Pin distance** in the top-left panel to move the target green. Your choice is remembered in this browser.
+
+## Mouse game mode
+
+Choose **Game mode** from **Play mode** to control the golfer without a launch monitor.
+Use the club arrows to choose driver, woods, irons or wedges; the carry estimate is for a
+full swing on flat ground under the current conditions. Move **Aim** to aim left or right;
+the reset arrow points back toward the pin.
+
+Hold the left mouse button on the swing pad, pull down for power, then push back up and
+release. A 140-pixel backswing gives full power; a shorter backswing gives a shorter shot.
+Return straight toward your starting point for a clean strike. Releasing left or right
+adds launch error and sidespin. Release without returning upward to cancel, or press Escape.
+The golfer follows your backswing and swings through the ball before the flight camera takes over.
+
+Game mode works on both the range and course holes, using the same terrain, wind, hazards,
+scoring and automatic conceded putts. Wait for the shot to finish before swinging again.
+Launch-monitor shots and the Space shortcut are ignored while game mode is active.
+Switch back to **Simulator** to resume hardware input or random simulated shots.
+Your selected mode is remembered in this browser.
 
 ## Course holes
 
