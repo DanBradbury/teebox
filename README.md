@@ -20,7 +20,7 @@ It speaks the **GSPro Open Connect** protocol on TCP port 921, so it works with 
 - Physics-based ball flight: lift and drag from spin ratio and Reynolds number, spin decay, and a friction-based bounce and roll
 - Playing conditions: temperature, altitude, humidity, wind and turf firmness all change the flight
 - Session table, dispersion map, club tagging, CSV export
-- Mouse-only game mode with an animated golfer, club selection, aim and pull-back/push-forward swings
+- Game mode with an animated golfer, club selection, aim and pull-back/push-forward swings, played with a mouse or a game controller
 - Built-in "Simulate shot" mode so you can try it with no hardware
 - Works offline. Nothing leaves your machine
 - Pure Node.js (18+) and a single HTML page. No build step, no `npm install`
@@ -38,7 +38,7 @@ Install [Node.js](https://nodejs.org) (LTS), then:
 Click **Simulate shot** (or press Space) to try it without a launch monitor.
 Set **Pin distance** in the top-left panel to move the target green. Your choice is remembered in this browser.
 
-## Mouse game mode
+## Game mode
 
 Choose **Game mode** from **Play mode** to control the golfer without a launch monitor.
 Use the club arrows to choose driver, woods, irons or wedges; the carry estimate is for a
@@ -56,6 +56,27 @@ scoring and automatic conceded putts. Wait for the shot to finish before swingin
 Launch-monitor shots and the Space shortcut are ignored while game mode is active.
 Switch back to **Simulator** to resume hardware input or random simulated shots.
 Your selected mode is remembered in this browser.
+
+### Playing with a controller
+
+Plug in or pair a game controller and press any button; the swing pad switches to **Right stick**.
+The controller swings differently from the mouse: pull the right stick back for power, then push
+it forward through the ball. The shot fires the moment the stick passes forward, with no button
+to release. Push straight for a clean strike; drifting left or right on the way through adds launch
+error and sidespin. Tempo counts, too: a quick, smooth push gives full speed, while pausing at the
+top or pushing slowly costs up to a quarter of your power. Letting the stick fall back to center
+cancels the swing.
+
+| Control | Action |
+| --- | --- |
+| Right stick | Swing: back for power, forward to strike |
+| Left stick or d-pad left/right | Aim |
+| LB / RB | Previous / next club |
+| Y | Aim back at the pin |
+| B | Cancel the swing |
+
+Controllers use the browser's standard gamepad layout (Xbox naming; PlayStation and Switch pads
+map to the same positions). Pressing on the swing pad with the mouse switches back to mouse swings.
 
 ## Course holes
 

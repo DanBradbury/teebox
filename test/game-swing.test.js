@@ -35,3 +35,35 @@ test('all clubs produce finite playable flights with distinct distances', () => 
   }
   assert.ok(P.simulate(shot(140, 0, 'DR')).carryYd > P.simulate(shot(140, 0, 'SW')).carryYd);
 });
+// Controller swing: a sequence of [x, y, ms] stick samples (Gamepad axes, down is +y).
+function stickShot(samples, club = '7i') {
+  const s = S.stickBegin();
+  for (const [x, y, t] of samples) S.stickMove(s, x, y, t);
+  return { state: s, shot: S.stickFinish(s, club, P.CLUBS) };
+}
+const flick = (depth, x = 0, gap = 120) => [[0, 0, 0], [0, depth / 2, 50], [0, depth, 100], [x, 0, 100 + gap / 2], [x, -1, 100 + gap]];
+test('stick nudges, unfinished backswings and returns to rest do not hit shots', () => {
+  assert.equal(stickShot([[0, .25, 0], [0, 0, 20]]).state.phase, 'ready');
+  assert.equal(stickShot([[0, 1, 0]]).shot, null);
+  const dropped = stickShot([[0, 1, 0], [0, 0, 20], [0, 0, 200], [0, 0, 300]]);
+  assert.equal(dropped.state.phase, 'cancelled');
+  assert.equal(dropped.shot, null);
+});
+test('stick strikes on the forward push with power from backswing depth', () => {
+  const full = stickShot(flick(1)).shot, half = stickShot(flick(.475)).shot;
+  assert.equal(full.power, 1);
+  assert.equal(half.power, .5);
+  assert.equal(full.hla, 0);
+  assert.deepEqual(full, stickShot(flick(1)).shot);
+  assert.ok(P.simulate(full).carryYd > P.simulate(half).carryYd * 1.5);
+});
+test('stick drift through the ball curves the shot; small drift stays pure', () => {
+  assert.equal(stickShot(flick(1, .05)).shot.error, 0);
+  assert.ok(P.simulate(stickShot(flick(1, -.3)).shot).totalX < 0);
+  assert.ok(P.simulate(stickShot(flick(1, .3)).shot).totalX > 0);
+});
+test('a slow downswing loses power', () => {
+  const quick = stickShot(flick(1, 0, 120)).shot, slow = stickShot(flick(1, 0, 600)).shot;
+  assert.equal(quick.tempo, 1);
+  assert.ok(slow.tempo < 1 && slow.power < quick.power);
+});
