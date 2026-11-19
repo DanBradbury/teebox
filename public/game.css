@@ -27,6 +27,7 @@
 #swingPad::before { content: ''; position: absolute; left: 50%; top: 32px; bottom: 16px; border-left: 2px dashed #b8cad480; }
 #swingPad::after { content: ''; position: absolute; left: calc(50% - 18px); top: 27px; width: 36px; height: 10px; background: #e4cf81; border-radius: 50%; box-shadow: 0 0 18px #e4cf8180; }
 #swingHandle { position: absolute; width: 14px; height: 14px; left: calc(50% - 7px); top: 25px; border-radius: 50%; background: white; box-shadow: 0 2px 6px #0008; z-index: 1; pointer-events: none; }
+#swingPad .pad-input { position: absolute; top: 7px; left: 0; width: 100%; color: #e4cf81; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; }
 #swingPad .pad-label { position: absolute; bottom: 12px; left: 0; width: 100%; color: #c7d5df; font-size: 10px; letter-spacing: .1em; }
 .game-meter { height: 6px; background: #101b26a6; border: 1px solid #a9bdc34d; overflow: hidden; margin-top: 5px; width: min(100%, 400px); }
 #gamePowerBar { height: 100%; width: 0; background: linear-gradient(90deg,#b9d7e6,#f4dc91); }
