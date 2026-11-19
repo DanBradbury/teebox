@@ -1,0 +1,19 @@
+{
+  "name": "teebox-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "iOS app wrapper for Teebox (Capacitor)",
+  "scripts": {
+    "sync-web": "node scripts/sync-web.js",
+    "sync": "node scripts/sync-web.js && cap sync ios",
+    "open": "cap open ios",
+    "test": "node --test"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/cli": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.6.2"
+  }
+}

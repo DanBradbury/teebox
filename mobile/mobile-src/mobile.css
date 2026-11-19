@@ -1,0 +1,114 @@
+/* iOS-only overrides, layered on top of the unchanged browser UI. */
+html, body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+body #top, body.game-mode #top { top: calc(env(safe-area-inset-top) + 8px); left: max(8px, env(safe-area-inset-left)); }
+body.path-game:not(.menu-open) #top { display: none; }
+body:not(.path-game):not(.path-sim) #top, body:not(.path-game):not(.path-sim) #gameHud { display: none; }
+#gameHud { bottom: max(8px, env(safe-area-inset-bottom)); left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); }
+#srvDot, #srvTxt, #lmDot, #lmTxt { display: none; }
+#top .badge:has(#srvDot), #top .badge:has(#lmDot), #top a[href="courses.html"], #csvBtn { display: none; }
+input, select, textarea { font-size: 16px; } /* stops iOS zooming into fields */
+@media (orientation: landscape) and (max-height: 500px) {
+  body.game-mode #top { max-height: calc(100vh - 150px); max-width: 260px; right: auto; }
+  #gameHud { grid-template-columns: minmax(0, 1fr) 150px; }
+  #swingPad { height: 130px; }
+}
+
+/* Portrait phones: shrink the game HUD into the bottom corners so more course shows. */
+@media (max-width: 650px) {
+  #gameHud { gap: 8px; grid-template-columns: minmax(0, 215px) 92px; align-items: end; }
+  .game-selection { grid-column: 1; min-height: 50px; padding: 0 2px 0 46px; border-top-width: 3px; border-bottom-width: 3px; }
+  .game-selection::after { display: none; }
+  #gameClubArt { width: 46px; height: 66px; bottom: 0; }
+  .club-primary { height: 44px; gap: 4px; }
+  #gameClubName { font-size: 14px; }
+  .club-distance { font-size: 13px; }
+  .club-secondary { display: none; }
+  #gameHud .club-arrow { flex-basis: 18px; font-size: 22px; }
+  .game-aim { font-size: 9px; gap: 4px; }
+  #aimReset { padding: 0 6px; }
+  .game-meter-label { margin-top: 4px; font-size: 9px; }
+  #gameStatus { font-size: 10px; min-height: 0; }
+  #swingPad { grid-row: 1 / 6; height: 170px; }
+  #swingPad .pad-label { font-size: 8px; bottom: 8px; }
+  #swingPad .pad-input { font-size: 8px; }
+}
+
+/* Home screen */
+#home { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px); background: linear-gradient(#0b141b, #16301f); color: #eef3f5; }
+#home[hidden], #holeBar[hidden], #menuActions[hidden] { display: none; }
+#home h1 { margin: 0; font-size: 44px; letter-spacing: .02em; }
+#home .tag { margin: 0 0 18px; color: #a8bac7; }
+.path-card { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; padding: 20px; border-radius: 14px; background: #ffffff12; border: 1px solid #ffffff30; color: inherit; }
+.path-card strong { font-size: 24px; }
+.path-card span { font-size: 14px; color: #c7d5df; }
+.path-card em { font-size: 11px; font-style: normal; letter-spacing: .1em; text-transform: uppercase; color: #e4cf81; min-height: 13px; }
+/* Game path: slim hole bar, settings in a sheet */
+#holeBar { position: fixed; z-index: 10; top: calc(env(safe-area-inset-top) + 6px); left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: #101a22d9; color: #eef3f5; }
+.hole-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.hole-main strong { font-size: 16px; }
+.hole-main span { font-size: 11px; color: #c7d5df; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#holeBarRound { font-size: 12px; color: #e4cf81; white-space: nowrap; }
+#menuBtn { padding: 4px 10px; font-size: 18px; }
+body.path-game.menu-open #top { top: calc(env(safe-area-inset-top) + 64px); z-index: 20; max-height: calc(100vh - 220px); }
+body.path-game #top .row:has(#playMode), body.path-game #top .row:has(#sceneMode), body.path-game #rangeControls, body.path-game #gameSettingsToggle, body.path-game #simHint, body.path-game #top .row:has(#simBtn) { display: none; }
+#menuActions { flex-wrap: wrap; padding: 8px; border-radius: 12px; background: #0b141bf2; position: fixed; z-index: 20; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom) + 12px); display: flex; gap: 8px; }
+#menuActions button { flex: 1 1 40%; padding: 12px 8px; }
+
+/* Course picker: same look as the web course list */
+:root { --brass: #c9a55c; --felt: #12241a; --dim: #9db0a1; --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
+#home, #coursePicker { background: radial-gradient(120% 80% at 50% 0%, #1a3324 0%, #0b1610 62%) #0b1610; }
+#home h1, #coursePicker h2 { font-family: var(--serif); font-weight: 400; }
+#home .path-card strong { font-family: var(--serif); font-weight: 400; }
+#home .path-card em { color: var(--brass); }
+#coursePicker { position: fixed; inset: 0; z-index: 50; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: calc(env(safe-area-inset-top) + 16px) 18px calc(env(safe-area-inset-bottom) + 24px); color: #eef3ea; }
+#coursePicker[hidden] { display: none; }
+#coursePicker h2 { margin: 6px 0 2px; font-size: 34px; letter-spacing: -.01em; }
+#coursePicker .lede { margin: 0 0 14px; color: var(--dim); }
+#coursePicker .back { align-self: flex-start; background: none; border: 0; color: var(--dim); font-size: 16px; padding: 4px 0; }
+#courseList { display: flex; flex-direction: column; gap: 18px; }
+.course-card { display: flex; flex-direction: column; padding: 0; text-align: left; overflow: hidden; background: var(--felt); border: 1px solid #ffffff1f; border-radius: 14px; color: inherit; }
+.course-card:active:not(:disabled) { border-color: #c9a55c99; }
+.course-card .art { aspect-ratio: 16 / 10; position: relative; background: linear-gradient(160deg, #1d4a31, #12301f); }
+.course-card .art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.course-card .body { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px 18px; }
+.course-card h3 { margin: 0 0 3px; font-family: var(--serif); font-weight: 400; font-size: 24px; }
+.course-card .where { color: var(--dim); font-size: 13px; }
+.course-card .stats { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 10px 0; border-top: 1px solid #ffffff1f; border-bottom: 1px solid #ffffff1f; }
+.course-card .stats div + div { border-left: 1px solid #ffffff1f; padding-left: 10px; }
+.course-card dt { font-size: 11px; color: var(--dim); margin-bottom: 2px; }
+.course-card dd { margin: 0; font-size: 17px; font-variant-numeric: tabular-nums; }
+.course-card .go { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--brass); }
+.course-card.soon { opacity: .62; }
+.course-card.soon .art { filter: saturate(.35); }
+.course-card.soon .go { color: var(--dim); }
+.course-card .tag { border: 1px solid currentColor; border-radius: 99px; padding: 3px 11px; font-size: 12px; }
+
+/* Touch aiming and landing preview */
+canvas#view { touch-action: none; }
+#gameAim { display: none; }
+.aim-hint { flex: 1; font-size: 9px; letter-spacing: .06em; color: #d4dfe4; text-transform: none; text-shadow: 0 1px 3px #000; }
+#landingPreview { opacity: .78; display: none; position: fixed; z-index: 9; width: 136px; height: 210px; right: max(8px, env(safe-area-inset-right)); top: calc(env(safe-area-inset-top) + 64px); pointer-events: none; }
+body.game-mode.path-game:not(.menu-open) #landingPreview, body.game-mode.path-sim #landingPreview { display: block; }
+body.path-sim.game-mode #landingPreview { top: auto; bottom: 230px; }
+
+/* Shot button and shot mode: idle shows a Shot button; tapping it dims the scene and centres a large swing pad. */
+body:not(.shot-mode) #swingPad { display: none; }
+#shotBtn { grid-column: 2; grid-row: 1 / 6; align-self: end; height: 64px; border-radius: 14px; background: #c9a55c; border: 0; color: #1d1608; font-size: 20px; font-weight: 700; letter-spacing: .04em; box-shadow: 0 4px 12px #0007; }
+#shotBtn:active { background: #d9b872; }
+#shotScrim, #shotBanner { display: none; }
+body.shot-mode #shotBtn, body.shot-mode .game-selection, body.shot-mode .game-aim, body.shot-mode #top { display: none; }
+body.shot-mode #shotScrim { display: block; position: fixed; inset: 0; z-index: 8; background: #000a; }
+body.shot-mode #gameHud { filter: none; z-index: 11; grid-template-columns: minmax(0, 1fr); }
+body.shot-mode .game-meter-label, body.shot-mode .game-meter, body.shot-mode #gameStatus { grid-column: 1; grid-row: auto; text-align: center; }
+body.shot-mode #swingPad { position: fixed; z-index: 12; left: 50%; transform: translateX(-50%); width: min(78vw, 300px); height: auto; top: calc(env(safe-area-inset-top) + 290px); bottom: 130px; box-shadow: 0 10px 40px #000a; }
+body.shot-mode #swingPad .pad-input { font-size: 11px; top: 12px; }
+body.shot-mode #swingPad .pad-label { font-size: 12px; bottom: 18px; }
+body.shot-mode #shotBanner { display: flex; align-items: center; gap: 10px; position: fixed; z-index: 12; top: calc(env(safe-area-inset-top) + 64px); left: max(8px, env(safe-area-inset-left)); right: 152px; padding: 10px 12px; border-radius: 10px; background: #101a22e6; color: #eef3f5; }
+#shotBanner div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+#shotBanner strong { font-size: 15px; }
+#shotBanner span { font-size: 11px; color: #c7d5df; }
+#shotCancel { padding: 8px 12px; }
+@media (orientation: landscape) and (max-height: 500px) {
+  body.shot-mode #swingPad { top: calc(env(safe-area-inset-top) + 60px); bottom: 70px; }
+  body.shot-mode #shotBanner { right: 160px; top: calc(env(safe-area-inset-top) + 8px); }
+}

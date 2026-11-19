@@ -1,0 +1,9 @@
+{
+  "appId": "com.teebox.golf",
+  "appName": "Teebox",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0b141b"
+  }
+}
