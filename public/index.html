@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Driving Range</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="game.css">
 <style>
   :root { --panel: rgba(12,20,16,.72); --line: rgba(255,255,255,.14); --fg: #eef5ee; --dim: #9fb3a3; --accent: #7fe08a; }
   * { box-sizing: border-box; }
@@ -65,9 +66,11 @@
 <canvas id="view"></canvas>
 
 <div class="panel" id="top">
+  <div class="row"><label class="badge" for="playMode">Play mode</label><select id="playMode"><option value="simulator">Simulator</option><option value="game">Game mode</option></select></div>
+  <button id="gameSettingsToggle" aria-expanded="true">Hide settings</button>
   <div class="badge"><span class="dot" id="srvDot"></span><span id="srvTxt">Connecting to app…</span></div>
   <div class="badge"><span class="dot" id="lmDot"></span><span id="lmTxt">Launch monitor: not connected</span></div>
-  <div class="row">
+  <div class="row" id="clubRow">
     <label class="badge" for="club">Club</label>
     <select id="club"></select>
     <select id="speed" title="Playback speed"><option value="1">1×</option><option value="2">2×</option><option value="0.5">0.5×</option></select>
@@ -111,7 +114,7 @@
       <label for="cTurf">Turf</label><select id="cTurf"></select>
     </div>
   </details>
-  <div class="hint"><kbd>Space</kbd> = simulated shot · real shots arrive automatically</div>
+  <div class="hint" id="simHint"><kbd>Space</kbd> = simulated shot · real shots arrive automatically</div>
 </div>
 
 <div class="panel" id="data">
@@ -132,7 +135,49 @@
 <div class="panel" id="mini"><canvas id="mapc" width="190" height="270"></canvas><div class="cap">Dispersion (yd)</div></div>
 <div class="panel" id="profile" hidden><div class="hint">HEIGHT VS TEE · TEE → GREEN</div><canvas id="profilec" width="210" height="105"></canvas></div>
 
+<section id="gameHud" hidden aria-label="Game controls">
+  <div class="game-console">
+    <div class="game-selection" aria-label="Club selection">
+      <svg id="gameClubArt" data-kind="iron" viewBox="0 0 120 150" aria-hidden="true">
+        <defs>
+          <linearGradient id="clubChrome" x1="0" y1="0" x2="1" y2=".8"><stop stop-color="#fff"/><stop offset=".25" stop-color="#a9b6c0"/><stop offset=".46" stop-color="#eef4f6"/><stop offset=".6" stop-color="#65747e"/><stop offset="1" stop-color="#d3dee4"/></linearGradient>
+          <linearGradient id="clubFace" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#7c8993"/><stop offset="1" stop-color="#253038"/></linearGradient>
+        </defs>
+        <path d="M27 148 L36 60" fill="none" stroke="#253038" stroke-width="9"/>
+        <path d="M27 148 L36 60" fill="none" stroke="url(#clubChrome)" stroke-width="6"/>
+        <g class="club-art-iron">
+          <path d="M33 67 Q27 51 43 44 L97 25 Q109 22 109 36 L105 59 Q103 69 90 71 L46 78 Q34 80 33 67Z" fill="url(#clubChrome)" stroke="#e7eef0" stroke-width="2"/>
+          <path d="M45 51 L99 32 L96 58 L45 67Z" fill="url(#clubFace)"/>
+          <path d="M50 53 L93 39 M49 58 L93 44 M48 63 L92 49 M58 64 L92 54" stroke="#b3bfc5" stroke-width="1.2"/>
+        </g>
+        <g class="club-art-wood">
+          <path d="M34 66 C10 51 25 20 51 18 C81 11 113 29 110 48 C109 68 60 85 34 66Z" fill="url(#clubChrome)" stroke="#e7eef0" stroke-width="2"/>
+          <path d="M32 48 C27 31 60 18 85 29 C107 38 99 50 78 57 C56 65 40 60 32 48Z" fill="#202c36"/>
+          <path d="M37 34 Q57 21 80 29" fill="none" stroke="#adbec9" stroke-width="2"/>
+          <path d="M38 62 Q65 77 96 55 M43 66 Q68 77 89 63" fill="none" stroke="#5d6c76" stroke-width="2"/>
+        </g>
+        <g class="club-art-wedge">
+          <path d="M33 69 Q28 53 43 44 L91 15 Q101 10 106 24 L109 58 Q109 68 94 72 L45 79 Q35 80 33 69Z" fill="url(#clubChrome)" stroke="#e7eef0" stroke-width="2"/>
+          <path d="M44 53 L96 23 L101 59 L45 69Z" fill="url(#clubFace)"/>
+          <path d="M49 53 L93 30 M49 58 L94 37 M49 63 L95 44 M56 66 L96 51 M78 64 L97 58" stroke="#b3bfc5" stroke-width="1.2"/>
+        </g>
+      </svg>
+      <button id="clubPrev" class="club-arrow" aria-label="Previous club">‹</button>
+      <div class="club-readout" aria-live="polite">
+        <div class="club-primary"><span id="gameClubName">7 Iron</span><span class="club-distance"><strong id="gameCarry">158</strong> <span>yards</span></span></div>
+        <div class="club-secondary"><span>Full shot</span><span title="Full-swing carry on flat ground in current conditions">Est. carry</span></div>
+      </div>
+      <button id="clubNext" class="club-arrow" aria-label="Next club">›</button>
+    </div>
+    <div class="game-aim"><label for="gameAim">Aim</label><input id="gameAim" type="range" min="-45" max="45" value="0" step="1"><output id="gameAimValue">0°</output><button id="aimReset" aria-label="Aim at pin">↺</button></div>
+    <div class="game-meter-label"><span>SWING POWER</span><output id="gamePower">0%</output></div>
+    <div class="game-meter"><div id="gamePowerBar"></div></div>
+    <p id="gameStatus" role="status">Hold mouse, pull down, push up, then release.</p>
+  </div>
+  <button id="swingPad" aria-label="Swing: hold mouse, drag down for power, return upward and release on center"><span id="swingHandle"></span><span class="pad-label">↓ BACK · ↑ THROUGH</span></button>
+</section>
 <script src="physics.js"></script>
+<script src="game-swing.js"></script>
 <script src="course.js"></script>
 <script>
 const P = GolfPhysics, YD = P.YD;
@@ -140,6 +185,7 @@ const $ = (s) => document.querySelector(s);
 const cv = $('#view'), ctx = cv.getContext('2d');
 const mapc = $('#mapc'), mctx = mapc.getContext('2d');
 let W, H, focal;
+let game = { enabled: false, reset() {}, draw() {} };
 
 // ---------- small vector helpers ----------
 const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
@@ -275,6 +321,7 @@ function settleShot() {
   showHoleInfo();
 }
 function clearSceneShots() {
+  if (typeof game !== 'undefined') game.reset();
   markers.length = 0; anim = null; lie = null; strokes = 0;
   showHoleInfo();
   $('#result').classList.remove('show');
@@ -981,7 +1028,7 @@ function camUpdate(dt) {
   // Camera sits behind the ball in the shot's own frame, so it faces the flag after each course shot.
   const fr = anim ? anim.frame : shotFrame();
   const heightAt = terrainHeight(), base = heightAt ? heightAt(fr.x, fr.z) : 0;
-  let dpos = HOME.pos, dtgt = HOME.tgt;
+  let dpos = HOME.pos, dtgt = game.enabled ? [0, -22, 100] : HOME.tgt;
   if (anim) {
     const b = frameLocal(fr, ballAt(anim.res, anim.t)), up = b[1] - base;
     dpos = [b[0] * 0.8, 9 + Math.min(up * 0.08, 3), Math.max(-9, b[2] - 30)];
@@ -1004,7 +1051,7 @@ function frame(now) {
     if (anim.endShown && now - anim.endedAt > 3500) { settleShot(); anim = null; }
   }
   camUpdate(dt); updateBasis();
-  drawScene(now); drawShot(now);
+  drawScene(now); drawShot(now); game.draw(now);
   requestAnimationFrame(frame);
 }
 updateBasis(); requestAnimationFrame(frame);
@@ -1072,10 +1119,16 @@ function drawMini() {
 
 // ---------- shot entry ----------
 function handleShot(s) {
+  if (game.enabled && s.source !== 'game') return;
   if (!s.club) s.club = $('#club').value;
   settleShot();   // a shot hit before the last one finished showing still plays from where that one stopped
   if (sceneMode === 'course' && hole) strokes++;
   const fr = shotFrame(), ground = terrainHeight();
+  if (s.source === 'game') {
+    const angle = (s.aim || 0) * Math.PI / 180, fx = fr.fx, fz = fr.fz;
+    fr.fx = fx * Math.cos(angle) + fz * Math.sin(angle);
+    fr.fz = fz * Math.cos(angle) - fx * Math.sin(angle);
+  }
   // Physics works in the shot's frame (ball at origin, aim along +z); terrain and wind are turned to match.
   const heightAt = ground && ((x, z) => { const w = frameWorld(fr, [x, 0, z]); return ground(w[0], w[2]); });
   const windFrom = conditions().windFrom - Math.atan2(fr.fx, fr.fz) * 180 / Math.PI;
@@ -1121,7 +1174,7 @@ showConditions();
 // ---------- UI wiring ----------
 for (const c of Object.keys(P.CLUBS)) $('#club').add(new Option(c, c, false, c === '7i'));
 $('#speed').onchange = (e) => (playSpeed = parseFloat(e.target.value));
-const simulate = () => { const s = P.randomShot($('#club').value); s.source = 'sim'; handleShot(s); };
+const simulate = () => { if (game.enabled) return; const s = P.randomShot($('#club').value); s.source = 'sim'; handleShot(s); };
 $('#simBtn').onclick = simulate;
 addEventListener('keydown', (e) => { if (e.code === 'Space' && !/SELECT|BUTTON|INPUT|SUMMARY/.test(document.activeElement.tagName)) { e.preventDefault(); simulate(); } });
 $('#clearBtn').onclick = () => { history.length = 0; clearSceneShots(); resetRound(); renderHistory(); drawMini(); $('#dataGrid').innerHTML = ''; $('#result').classList.remove('show'); };
@@ -1151,5 +1204,6 @@ if (location.protocol.startsWith('http')) {
   };
 } else { $('#srvTxt').textContent = 'Opened as a file – run start.bat for launch monitor input'; }
 </script>
+<script src="game.js"></script>
 </body>
 </html>

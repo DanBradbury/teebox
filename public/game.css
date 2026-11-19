@@ -1,0 +1,67 @@
+#gameHud[hidden] { display: none; }
+#gameHud { position: fixed; bottom: 22px; left: 24px; right: 24px; display: grid; grid-template-columns: minmax(0, 720px) 150px; justify-content: space-between; align-items: end; gap: 32px; filter: drop-shadow(0 4px 6px #0006); }
+.game-console { min-width: 0; }
+.game-selection { position: relative; display: flex; align-items: center; min-height: 105px; padding: 0 8px 0 104px; background: linear-gradient(90deg, #101a22ed, #172630dc 76%, #17263090); border-top: 5px solid #9aa9b7bb; border-bottom: 5px solid #768997aa; box-shadow: 0 -1px 0 #d9e5e67a, 0 1px 0 #071014; }
+.game-selection::after { content: ''; position: absolute; top: 51px; left: 0; right: 0; height: 3px; background: linear-gradient(90deg,#a8b6c280,#a8b6c24d); pointer-events: none; }
+#gameClubArt { position: absolute; width: 112px; height: 140px; left: 0; bottom: -3px; filter: drop-shadow(2px 4px 2px #0009); }
+#gameClubArt g { display: none; }
+#gameClubArt[data-kind="iron"] .club-art-iron, #gameClubArt[data-kind="wood"] .club-art-wood, #gameClubArt[data-kind="wedge"] .club-art-wedge { display: block; }
+.club-readout { flex: 1; min-width: 0; text-transform: uppercase; font-weight: 700; text-shadow: 1px 2px 2px #000c; }
+.club-primary, .club-secondary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.club-primary { height: 52px; font-style: italic; letter-spacing: .035em; }
+#gameClubName { font-size: clamp(19px, 2.1vw, 29px); white-space: nowrap; }
+.club-distance { font-size: clamp(17px, 1.9vw, 27px); white-space: nowrap; color: #f0f4ee; }
+#gameCarry { font-weight: 750; font-variant-numeric: tabular-nums; }
+.club-distance span { font-size: .7em; letter-spacing: .06em; }
+.club-secondary { height: 38px; font-size: 16px; letter-spacing: .11em; color: #d4dfe4; }
+.club-secondary span:last-child { font-size: 10px; letter-spacing: .14em; color: #a8bac7; }
+#gameHud .club-arrow { align-self: stretch; z-index: 1; flex: 0 0 32px; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 34px; color: #cbdce7; text-shadow: 0 2px 3px #000; }
+#gameHud .club-arrow:hover { color: white; background: #c2e3ff20; }
+#gameHud button:focus-visible { outline: 2px solid #e2c576; outline-offset: 3px; }
+.game-aim { display: flex; gap: 12px; align-items: center; margin-top: 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; width: min(100%, 400px); padding: 0 8px; }
+#gameAim { min-width: 0; width: 100%; accent-color: #d1dfe8; }
+#gameAimValue { min-width: 32px; font-variant-numeric: tabular-nums; }
+#aimReset { padding: 2px 8px; border-radius: 2px; background: #182630cc; }
+#gameStatus { font-size: 12px; color: #eef3f5; min-height: 30px; margin: 10px 0 0; text-shadow: 0 1px 3px black; }
+#swingPad { position: relative; height: 210px; width: 100%; touch-action: none; cursor: ns-resize; overflow: hidden; background: linear-gradient(90deg,#101a22df,#2c414de0,#101a22df); border: 1px solid #a8bdcb; border-top: 4px solid #a5b4c0; border-bottom: 4px solid #798e9e; border-radius: 2px; padding: 0; }
+#swingPad::before { content: ''; position: absolute; left: 50%; top: 32px; bottom: 16px; border-left: 2px dashed #b8cad480; }
+#swingPad::after { content: ''; position: absolute; left: calc(50% - 18px); top: 27px; width: 36px; height: 10px; background: #e4cf81; border-radius: 50%; box-shadow: 0 0 18px #e4cf8180; }
+#swingHandle { position: absolute; width: 14px; height: 14px; left: calc(50% - 7px); top: 25px; border-radius: 50%; background: white; box-shadow: 0 2px 6px #0008; z-index: 1; pointer-events: none; }
+#swingPad .pad-label { position: absolute; bottom: 12px; left: 0; width: 100%; color: #c7d5df; font-size: 10px; letter-spacing: .1em; }
+.game-meter { height: 6px; background: #101b26a6; border: 1px solid #a9bdc34d; overflow: hidden; margin-top: 5px; width: min(100%, 400px); }
+#gamePowerBar { height: 100%; width: 0; background: linear-gradient(90deg,#b9d7e6,#f4dc91); }
+.game-meter-label { display: flex; justify-content: space-between; margin-top: 10px; font-size: 10px; letter-spacing: .1em; color: #e3ebef; width: min(100%, 400px); text-shadow: 0 1px 3px #000; }
+body.game-mode #hist, body.game-mode #data, body.game-mode #mini, body.game-mode #profile, body.game-mode #simBtn, body.game-mode #simHint, body.game-mode #clubRow { display: none; }
+body.game-mode #top { max-height: calc(100vh - 315px); overflow: auto; }
+body.game-mode #result { top: 12%; }
+button:disabled { opacity: .45; cursor: default; }
+#gameSettingsToggle { display: none; }
+body.game-mode #gameSettingsToggle { display: block; }
+body.game-mode #top.compact > :not(:first-child):not(#gameSettingsToggle) { display: none; }
+@media (max-width: 1000px) {
+  #gameHud { left: 12px; right: 12px; gap: 18px; grid-template-columns: minmax(0, 1fr) 125px; }
+  .game-selection { padding-left: 77px; }
+  #gameClubArt { width: 85px; height: 125px; }
+  #gameClubName { font-size: 19px; }
+  .club-distance { font-size: 18px; }
+  .club-primary { gap: 6px; }
+}
+@media (max-width: 650px) {
+  #gameHud { bottom: 8px; gap: 14px; grid-template-columns: minmax(0, 1fr) 104px; }
+  .game-console { display: contents; }
+  .game-selection { grid-column: 1 / -1; grid-row: 1; padding-left: 65px; min-height: 82px; }
+  #gameClubArt { width: 74px; height: 108px; }
+  .club-primary { height: 42px; }
+  .club-secondary { height: 30px; font-size: 12px; }
+  .game-selection::after { top: 42px; }
+  #gameClubName { font-size: 18px; }
+  .club-distance { font-size: 17px; }
+  #gameHud .club-arrow { flex-basis: 26px; }
+  .game-aim { grid-column: 1; grid-row: 2; align-self: end; padding: 0; margin: 0; gap: 6px; }
+  .game-meter-label { grid-column: 1; grid-row: 3; align-self: end; }
+  .game-meter { grid-column: 1; grid-row: 4; margin: 0; }
+  #gameStatus { grid-column: 1; grid-row: 5; align-self: start; margin: 0; }
+  #swingPad { grid-column: 2; grid-row: 2 / 6; }
+  body.game-mode #top { top: 8px; left: 8px; right: 8px; min-width: 0; max-height: calc(100vh - 365px); }
+  body.game-mode #result { top: 24%; width: 100%; }
+}
