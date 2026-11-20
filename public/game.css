@@ -23,10 +23,59 @@
 #gameAimValue { min-width: 32px; font-variant-numeric: tabular-nums; }
 #aimReset { padding: 2px 8px; border-radius: 2px; background: #182630cc; }
 #gameStatus { font-size: 12px; color: #eef3f5; min-height: 30px; margin: 10px 0 0; text-shadow: 0 1px 3px black; }
-#swingPad { position: relative; height: 210px; width: 100%; touch-action: none; cursor: ns-resize; overflow: hidden; background: linear-gradient(90deg,#101a22df,#2c414de0,#101a22df); border: 1px solid #a8bdcb; border-top: 4px solid #a5b4c0; border-bottom: 4px solid #798e9e; border-radius: 2px; padding: 0; }
-#swingPad::before { content: ''; position: absolute; left: 50%; top: 32px; bottom: 16px; border-left: 2px dashed #b8cad480; }
-#swingPad::after { content: ''; position: absolute; left: calc(50% - 18px); top: 27px; width: 36px; height: 10px; background: #e4cf81; border-radius: 50%; box-shadow: 0 0 18px #e4cf8180; }
-#swingHandle { position: absolute; width: 14px; height: 14px; left: calc(50% - 7px); top: 25px; border-radius: 50%; background: white; box-shadow: 0 2px 6px #0008; z-index: 1; pointer-events: none; }
+#swingPad { position: relative; height: 250px; width: 100%; touch-action: none; cursor: ns-resize; overflow: hidden; background: linear-gradient(90deg,#101a22df,#2c414de0,#101a22df); border: 1px solid #a8bdcb; border-top: 4px solid #a5b4c0; border-bottom: 4px solid #798e9e; border-radius: 2px; padding: 0; }
+#swingPad { --hit: #f4dc91; }
+#swingPad[data-tier="good"] { --hit: #e8f3f8; }
+#swingPad[data-tier="miss"] { --hit: #f2a283; }
+#swingPad.busy:not(.following) { opacity: .45; cursor: default; }
+#swingGuide { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#swingGuide .zone { fill: #e4cf811f; stroke: #e4cf81aa; stroke-width: 1.5; stroke-dasharray: 4 3; transition: fill .15s; }
+#swingGuide .streak { fill: var(--hit); opacity: 0; transform-box: fill-box; transform-origin: center; }
+#swingGuide .thru-dot { fill: none; stroke: #b8cad44d; stroke-width: 1.5; }
+#swingPad.swinging .thru-dot, #swingPad.following .thru-dot { stroke: #b8cad499; }
+#swingGuide .thru-dot.lit { fill: var(--hit); stroke: var(--hit); }
+#swingGuide .guide-dot { fill: #b8cad459; transition: fill .1s; }
+#swingGuide .guide-dot.end { fill: none; stroke: #b8cad480; stroke-width: 1.5; }
+#swingGuide .guide-dot.lit { fill: #f4dc91; }
+#swingGuide .guide-dot.end.lit { stroke: #f4dc91; fill: #f4dc9166; }
+#swingGuide .trail { fill: none; stroke: #ffffff8c; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+#swingGuide .ball { fill: #fff; transform-box: fill-box; transform-origin: center; }
+#swingGuide .ring { fill: none; stroke: var(--hit); stroke-width: 2.5; opacity: 0; transform-box: fill-box; transform-origin: center; }
+#swingPad.swinging .zone { fill: #e4cf8133; }
+/* Crossing the hitting zone: the zone flares, a streak and ring burst out, the pad glows and jolts, and the ball leaves. */
+#swingPad.struck { animation: pad-hit .55s ease-out; }
+#swingPad.struck #swingGuide { animation: jolt .22s ease-out; }
+#swingPad.struck #swingHandle { animation: handle-hit .45s ease-out; }
+#swingPad.struck .zone { animation: zone-hit .6s ease-out; }
+#swingPad.struck .streak { animation: streak .45s ease-out; }
+#swingPad.struck .ring { animation: zone-ring .55s ease-out; }
+#swingPad.struck .ball { animation: ball-away .45s ease-in forwards; }
+#swingPad.struck .trail { animation: trail-fade .9s ease-in forwards; }
+@keyframes pad-hit { from { box-shadow: 0 0 0 2px var(--hit), 0 0 44px var(--hit); } }
+@keyframes jolt { 30% { transform: translateY(-5px); } 65% { transform: translateY(2px); } }
+@keyframes handle-hit { from { box-shadow: 0 0 0 10px var(--hit), 0 0 30px var(--hit); background: var(--hit); } }
+@keyframes zone-hit { from { fill: var(--hit); stroke: #fff; } }
+@keyframes streak { from { opacity: 1; transform: scaleY(6); } to { opacity: 0; transform: scaleY(1); } }
+@keyframes zone-ring { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(6); } }
+@keyframes ball-away { to { transform: translateY(-140px) scale(.3); opacity: 0; } }
+@keyframes trail-fade { to { opacity: 0; } }
+#swingHandle { position: absolute; width: 26px; height: 26px; left: calc(50% - 13px); top: 19px; /* game.js moves it onto the hitting zone */ border-radius: 50%; background: #ffffff38; border: 2px solid #fff; box-shadow: 0 2px 8px #0009; z-index: 1; pointer-events: none; }
+#swingPad.swinging #swingHandle { background: #ffffff5c; }
+#shotGrade { position: fixed; z-index: 30; left: 50%; top: 36%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0; white-space: nowrap;
+  font-size: clamp(30px, 6vw, 56px); font-weight: 800; font-style: italic; text-transform: uppercase; letter-spacing: .04em; color: #f4dc91; text-shadow: 0 3px 0 #0009, 0 0 28px #0008; }
+#shotGrade[data-tier="perfect"] { color: #ffe7a1; text-shadow: 0 3px 0 #0009, 0 0 30px #f4dc91aa; }
+#shotGrade[data-tier="good"] { color: #dcebf2; }
+#shotGrade[data-tier="miss"] { color: #f2b49b; font-size: clamp(24px, 4.5vw, 40px); }
+#shotGrade.show { animation: grade-pop 1.7s ease-out forwards; }
+@keyframes grade-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.55); }
+  12% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+  22% { transform: translate(-50%, -50%) scale(1); }
+  75% { opacity: 1; transform: translate(-50%, -50%); }
+  100% { opacity: 0; transform: translate(-50%, -80%); }
+}
+@keyframes grade-fade { 0%, 75% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #shotGrade.show { animation-name: grade-fade; } #swingPad.struck .ring, #swingPad.struck .ball, #swingPad.struck #swingGuide { animation: none; } }
 #swingPad .pad-input { position: absolute; top: 7px; left: 0; width: 100%; color: #e4cf81; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; }
 #swingPad .pad-label { position: absolute; bottom: 12px; left: 0; width: 100%; color: #c7d5df; font-size: 10px; letter-spacing: .1em; }
 .game-meter { height: 6px; background: #101b26a6; border: 1px solid #a9bdc34d; overflow: hidden; margin-top: 5px; width: min(100%, 400px); }

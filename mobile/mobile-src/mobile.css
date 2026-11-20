@@ -96,19 +96,25 @@ body:not(.shot-mode) #swingPad { display: none; }
 #shotBtn { grid-column: 2; grid-row: 1 / 6; align-self: end; height: 64px; border-radius: 14px; background: #c9a55c; border: 0; color: #1d1608; font-size: 20px; font-weight: 700; letter-spacing: .04em; box-shadow: 0 4px 12px #0007; }
 #shotBtn:active { background: #d9b872; }
 #shotScrim, #shotBanner { display: none; }
-body.shot-mode #shotBtn, body.shot-mode .game-selection, body.shot-mode .game-aim, body.shot-mode #top { display: none; }
-body.shot-mode #shotScrim { display: block; position: fixed; inset: 0; z-index: 8; background: #000a; }
-body.shot-mode #gameHud { filter: none; z-index: 11; grid-template-columns: minmax(0, 1fr); }
-body.shot-mode .game-meter-label, body.shot-mode .game-meter, body.shot-mode #gameStatus { grid-column: 1; grid-row: auto; text-align: center; }
-body.shot-mode #swingPad { position: fixed; z-index: 12; left: 50%; transform: translateX(-50%); width: min(78vw, 300px); height: auto; top: calc(env(safe-area-inset-top) + 290px); bottom: 130px; box-shadow: 0 10px 40px #000a; }
+/* Shot mode clears the top of the screen (hole bar, landing preview, last result) so the pad can run nearly full height,
+   with room above the hitting zone for the follow-through. The power meter and status move into the dots and the bottom banner. */
+body.shot-mode #shotBtn, body.shot-mode .game-selection, body.shot-mode .game-aim, body.shot-mode #top,
+body.shot-mode #holeBar, body.shot-mode #result, body.shot-mode .game-meter-label, body.shot-mode .game-meter, body.shot-mode #gameStatus { display: none; }
+body.shot-mode.game-mode.path-game #landingPreview, body.shot-mode.game-mode.path-sim #landingPreview { display: none; }
+body.shot-mode #shotScrim { display: block; position: fixed; inset: 0; z-index: 8; background: #0005; }
+body.shot-mode #gameHud { filter: none; z-index: 11; }
+body.shot-mode #swingPad { position: fixed; z-index: 12; left: 50%; transform: translateX(-50%); width: min(80vw, 320px); height: auto;
+  top: calc(env(safe-area-inset-top) + 16px); bottom: calc(env(safe-area-inset-bottom) + 92px);
+  background: linear-gradient(180deg, #101a2233, #101a2266 30%, #101a2299); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  border: 1px solid #ffffff40; border-radius: 18px; box-shadow: 0 10px 40px #0006; }
 body.shot-mode #swingPad .pad-input { font-size: 11px; top: 12px; }
-body.shot-mode #swingPad .pad-label { font-size: 12px; bottom: 18px; }
-body.shot-mode #shotBanner { display: flex; align-items: center; gap: 10px; position: fixed; z-index: 12; top: calc(env(safe-area-inset-top) + 64px); left: max(8px, env(safe-area-inset-left)); right: 152px; padding: 10px 12px; border-radius: 10px; background: #101a22e6; color: #eef3f5; }
+body.shot-mode #swingPad .pad-label { font-size: 12px; bottom: 14px; }
+body.shot-mode #shotBanner { display: flex; align-items: center; gap: 10px; position: fixed; z-index: 12; bottom: calc(env(safe-area-inset-bottom) + 12px); left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); padding: 10px 12px; border-radius: 12px; background: #101a22b3; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #eef3f5; }
 #shotBanner div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 #shotBanner strong { font-size: 15px; }
 #shotBanner span { font-size: 11px; color: #c7d5df; }
 #shotCancel { padding: 8px 12px; }
 @media (orientation: landscape) and (max-height: 500px) {
-  body.shot-mode #swingPad { top: calc(env(safe-area-inset-top) + 60px); bottom: 70px; }
-  body.shot-mode #shotBanner { right: 160px; top: calc(env(safe-area-inset-top) + 8px); }
+  body.shot-mode #swingPad { top: calc(env(safe-area-inset-top) + 8px); bottom: calc(env(safe-area-inset-bottom) + 70px); }
+  body.shot-mode #shotBanner { padding: 6px 10px; }
 }

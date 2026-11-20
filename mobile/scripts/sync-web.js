@@ -26,7 +26,7 @@ const index = path.join(OUT, 'index.html');
 fs.writeFileSync(index, patchIndex(fs.readFileSync(index, 'utf8')));
 console.log(`Synced ${SRC} -> ${OUT}`);
 // Touch wording for strings the browser build words for a mouse.
-const WORDING = [['Hold mouse, pull down, push up, then release.', 'Touch the pad, pull down, push up, then release.'], ["'Mouse'", "'Touch'"], ['>Mouse<', '>Touch<']];
+const WORDING = [['Hold mouse, pull down the dotted path, then swing back up through the ball.', 'Touch the pad, pull down the dotted path, then swing back up through the ball.'], ["'Mouse'", "'Touch'"], ['>Mouse<', '>Touch<']];
 for (const name of ['game.js', 'index.html']) {
   const file = path.join(OUT, name);
   let text = fs.readFileSync(file, 'utf8');

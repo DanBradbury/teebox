@@ -131,5 +131,11 @@
   if (!haptics) return;
   const pad = $('#swingPad');
   pad.addEventListener('pointerdown', () => haptics.impact({ style: 'LIGHT' }).catch(() => {}));
-  pad.addEventListener('pointerup', () => haptics.impact({ style: 'MEDIUM' }).catch(() => {}));
+  // game.js ticks at each quarter of the backswing and each follow-through dot, and strikes as the finger crosses the hitting zone.
+  // The strike is a short heavy-heavy-medium rattle so it reads as contact, not just another tick.
+  const tap = (style) => haptics.impact({ style }).catch(() => {});
+  pad.addEventListener('swingtick', (e) => {
+    if (e.detail !== 'strike') { tap('LIGHT'); return; }
+    tap('HEAVY'); setTimeout(() => tap('HEAVY'), 55); setTimeout(() => tap('MEDIUM'), 120);
+  });
 })();
