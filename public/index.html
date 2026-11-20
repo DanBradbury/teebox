@@ -172,10 +172,11 @@
     <div class="game-aim"><label for="gameAim">Aim</label><input id="gameAim" type="range" min="-45" max="45" value="0" step="1"><output id="gameAimValue">0°</output><button id="aimReset" aria-label="Aim at pin">↺</button></div>
     <div class="game-meter-label"><span>SWING POWER</span><output id="gamePower">0%</output></div>
     <div class="game-meter"><div id="gamePowerBar"></div></div>
-    <p id="gameStatus" role="status">Hold mouse, pull down, push up, then release.</p>
+    <p id="gameStatus" role="status">Hold mouse, pull down the dotted path, then swing back up through the ball.</p>
   </div>
-  <button id="swingPad" aria-label="Swing: hold mouse, drag down for power, return upward and release on center, or use a controller's right stick"><span id="gameInput" class="pad-input">Mouse</span><span id="swingHandle"></span><span class="pad-label">↓ BACK · ↑ THROUGH</span></button>
+  <button id="swingPad" aria-label="Swing: hold mouse, drag down the dotted path for power, then swing back up through the ball, or use a controller's right stick"><span id="gameInput" class="pad-input">Mouse</span><svg id="swingGuide" aria-hidden="true"></svg><span id="swingHandle"></span><span class="pad-label">↓ BACK · ↑ THROUGH</span></button>
 </section>
+<div id="shotGrade" aria-hidden="true"></div>
 <script src="physics.js"></script>
 <script src="game-swing.js"></script>
 <script src="course.js"></script>

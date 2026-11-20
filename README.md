@@ -38,6 +38,10 @@ Install [Node.js](https://nodejs.org) (LTS), then:
 Click **Simulate shot** (or press Space) to try it without a launch monitor.
 Set **Pin distance** in the top-left panel to move the target green. Your choice is remembered in this browser.
 
+## iOS app
+
+The game also runs as an iPhone/iPad app. See [mobile/README.md](mobile/README.md) for setup.
+
 ## Game mode
 
 Choose **Game mode** from **Play mode** to control the golfer without a launch monitor.

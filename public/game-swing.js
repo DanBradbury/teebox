@@ -17,9 +17,21 @@
     s.returnDistance = s.depth - (y - s.y);
     return s;
   }
+  // The hitting zone is a band on the address line. After a real backswing, coming back up into it strikes the ball,
+  // so the shot fires as the finger crosses rather than on release. Sideways drift at that moment sets the miss.
+  const ZONE = 12, MIN_BACK = 24;
+  const struck = (s) => !!s && s.depth >= MIN_BACK && s.lastY - s.y <= ZONE;
   function finish(s, club, clubs) {
-    if (!s || s.depth < 12 || s.returnDistance < s.depth * .7) return null;
+    if (!struck(s)) return null;
     return strike(clamp(s.depth / 140, .08, 1), clamp(s.error / 70, -1, 1), club, clubs);
+  }
+  // Placeholder shot feedback from strike quality; tiers will grow as the swing model does.
+  function grade(shot) {
+    const miss = Math.abs(shot.error) + (shot.tempo !== undefined ? 1 - shot.tempo : 0);
+    if (miss < .05) return { tier: 'perfect', label: 'Perfect!' };
+    if (miss < .15) return { tier: 'great', label: 'Great shot!' };
+    if (miss < .35) return { tier: 'good', label: 'Nice' };
+    return { tier: 'miss', label: shot.error < 0 ? 'Pulled' : 'Pushed' };
   }
 
   // Analog stick swing: pull the stick back (down), then push it forward (up) through the ball.
@@ -58,7 +70,7 @@
     if (shot) shot.tempo = tempo;
     return shot;
   }
-  const api = { begin, move, finish, stickBegin, stickMove, stickFinish, STICK };
+  const api = { begin, move, finish, struck, grade, ZONE, stickBegin, stickMove, stickFinish, STICK };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.GolfSwing = api;
 })(typeof window !== 'undefined' ? window : globalThis);

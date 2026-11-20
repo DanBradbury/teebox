@@ -35,6 +35,24 @@ test('all clubs produce finite playable flights with distinct distances', () => 
   }
   assert.ok(P.simulate(shot(140, 0, 'DR')).carryYd > P.simulate(shot(140, 0, 'SW')).carryYd);
 });
+test('the strike fires on the way back up through the hitting zone, not on the way down', () => {
+  const s = S.begin(0, 0);
+  for (let y = 0; y <= 140; y += 4) { S.move(s, 0, y); assert.equal(S.struck(s), false, `down ${y}`); }
+  S.move(s, 0, 60);
+  assert.equal(S.struck(s), false);
+  S.move(s, 0, S.ZONE);
+  assert.equal(S.struck(s), true);
+  const tiny = S.begin(0, 0);
+  S.move(tiny, 0, 15); S.move(tiny, 0, 0);
+  assert.equal(S.struck(tiny), false);
+});
+test('shot grades follow strike accuracy', () => {
+  assert.equal(S.grade(shot(140)).tier, 'perfect');
+  assert.equal(S.grade(shot(140, 7)).tier, 'great');
+  assert.equal(S.grade(shot(140, 20)).tier, 'good');
+  assert.deepEqual(S.grade(shot(140, -50)), { tier: 'miss', label: 'Pulled' });
+  assert.deepEqual(S.grade(shot(140, 50)), { tier: 'miss', label: 'Pushed' });
+});
 // Controller swing: a sequence of [x, y, ms] stick samples (Gamepad axes, down is +y).
 function stickShot(samples, club = '7i') {
   const s = S.stickBegin();
